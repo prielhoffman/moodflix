@@ -2,10 +2,10 @@ from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-
+# --------------------------------- INPUT ---------------------------------
 class BingePreference(str, Enum):
     BINGE = "binge"
-    SHORT_SERIES = "short series"
+    SHORT_SERIES = "short_series"
 
 
 class ContentIntensity(str, Enum):
@@ -51,4 +51,38 @@ class RecommendationInput(BaseModel):
     watching_context: WatchingContext = Field(
         WatchingContext.ALONE,
         description="Context in which the show will be watched",
+    )
+
+
+# --------------------------------- OUTPUT ---------------------------------
+class RecommendationOutput(BaseModel):
+    title: str = Field(..., description="Title of the TV show")
+    recommendation_reason: Optional[str] = Field(
+        None,
+        description="Short explanation of why this show was recommended",
+    )
+    genres: List[str] = Field(
+        default_factory=list,
+        description="Primary genres of the show",
+    )
+    short_summary: str = Field(
+        ...,
+        description="Brief summary of the TV show",
+    )
+    content_rating: Optional[str] = Field(
+        None,
+        description="Age or content classification (e.g. TV-14, TV-MA)",
+    )
+    average_episode_length: Optional[int] = Field(
+        None,
+        description="Average episode duration in minutes",
+    )
+    number_of_seasons: Optional[int] = Field(
+        None,
+        ge=1,
+        description="Total number of seasons",
+    )
+    language: Optional[str] = Field(
+        None,
+        description="Original language of the TV show",
     )
