@@ -1,6 +1,6 @@
 from typing import List
 
-from schemas import (
+from app.schemas import (
     RecommendationInput,
     RecommendationOutput,
     BingePreference,
@@ -8,7 +8,7 @@ from schemas import (
     EpisodeLengthPreference,
     WatchingContext,
 )
-from data import get_all_shows
+from app.data import get_all_shows
 
 
 # Simple content rating hierarchy for safety checks
