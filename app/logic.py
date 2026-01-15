@@ -48,7 +48,7 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
 
         # Binge preference
         seasons = show.get("number_of_seasons")
-        if user_input.binge_preference == BingePreference.ONE_SEASON and seasons > 3:
+        if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > 3:
             continue
         if user_input.binge_preference == BingePreference.BINGE and seasons <= 3:
             continue
