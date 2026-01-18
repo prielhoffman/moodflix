@@ -8,10 +8,14 @@ class BingePreference(str, Enum):
     SHORT_SERIES = "short_series"
 
 
-class ContentIntensity(str, Enum):
-    LIGHT = "light"
-    MODERATE = "moderate"
+class Mood(str, Enum):
+    CHILL = "chill"
+    HAPPY = "happy"
+    FAMILIAR = "familiar"
+    FOCUSED = "focused"
+    ADRENALINE = "adrenaline"
     DARK = "dark"
+    CURIOUS = "curious"
 
 
 class EpisodeLengthPreference(str, Enum):
@@ -36,9 +40,9 @@ class RecommendationInput(BaseModel):
         default_factory=list,
         description="List of preferred genres (e.g. comedy, drama, sci-fi)",
     )
-    content_intensity: ContentIntensity = Field(
-        ContentIntensity.MODERATE,
-        description="Preferred emotional or thematic intensity of the show",
+    mood: Mood = Field(
+        Mood.CHILL,
+        description="How the user wants to feel while watching (emotional intention)",
     )
     language_preference: Optional[str] = Field(
         None,

@@ -4,19 +4,28 @@ from app.schemas import (
     RecommendationInput,
     RecommendationOutput,
     BingePreference,
-    ContentIntensity,
+    Mood,
     EpisodeLengthPreference,
     WatchingContext,
 )
 from app.data import get_all_shows
 
 
+# -------------------- Safety --------------------
 _ADULT_RATINGS = {"TV-MA"}
 
-_INTENSITY_GENRE_MAP = {
-    ContentIntensity.LIGHT: {"comedy", "family", "animation", "documentary"},
-    ContentIntensity.MODERATE: {"drama", "mystery", "adventure"},
-    ContentIntensity.DARK: {"thriller", "crime", "horror"},
+
+# -------------------- Mood → Genre soft mapping --------------------
+# Mood represents how the user wants to feel.
+# This mapping is used only as a SOFT signal (scoring), never as a filter.
+_MOOD_GENRE_MAP = {
+    Mood.CHILL: {"comedy", "slice of life", "lifestyle", "animation", "documentary", "design"},
+    Mood.HAPPY: {"comedy", "romance", "family", "musical", "talent", "cooking"},
+    Mood.FAMILIAR: {"sitcom", "procedural", "family", "animation", "reality"},
+    Mood.FOCUSED: {"drama", "mystery", "historical", "legal", "medical", "competition"},
+    Mood.ADRENALINE: {"action", "adventure", "sci-fi", "fantasy", "survival", "competition"},
+    Mood.DARK: {"thriller", "crime", "horror", "psychological", "true crime"},
+    Mood.CURIOUS: {"documentary", "travel", "culture", "anthology", "celebrity", "reality"},
 }
 
 
@@ -27,8 +36,8 @@ def _build_recommendation_reason(
     seasons: int,
     episode_length: int | None,
     episode_length_pref: EpisodeLengthPreference,
-    intensity_matched: bool,
-    intensity: ContentIntensity,
+    mood_matched: bool,
+    mood: Mood,
 ) -> str | None:
     """
     Build a short, user-friendly recommendation reason
@@ -42,27 +51,35 @@ def _build_recommendation_reason(
             f"Matches your interest in {', '.join(sorted(common_genres))}"
         )
 
-    # 2. Binge / commitment
+    # 2. Binge / commitment preference
     if binge_preference == BingePreference.SHORT_SERIES and seasons <= 3:
         reasons.append("Easy to finish in a few days")
     elif binge_preference == BingePreference.BINGE and seasons > 3:
         reasons.append("Great for binge watching")
 
-    # 3. Episode length
+    # 3. Episode length preference
     if episode_length is not None:
         if episode_length_pref == EpisodeLengthPreference.SHORT and episode_length <= 30:
             reasons.append("Short, easy-to-watch episodes")
         elif episode_length_pref == EpisodeLengthPreference.LONG and episode_length > 30:
             reasons.append("Long, immersive episodes")
 
-    # 4. Content intensity
-    if intensity_matched:
-        if intensity == ContentIntensity.LIGHT:
-            reasons.append("Light and easy to watch")
-        elif intensity == ContentIntensity.DARK:
+    # 4. Mood (soft, descriptive)
+    if mood_matched:
+        if mood == Mood.CHILL:
+            reasons.append("Relaxed and easy to watch")
+        elif mood == Mood.HAPPY:
+            reasons.append("Feel-good and uplifting")
+        elif mood == Mood.FAMILIAR:
+            reasons.append("Comforting and familiar vibe")
+        elif mood == Mood.FOCUSED:
+            reasons.append("Engaging and easy to focus on")
+        elif mood == Mood.ADRENALINE:
+            reasons.append("High-energy and exciting")
+        elif mood == Mood.DARK:
             reasons.append("Darker, more intense tone")
-        elif intensity == ContentIntensity.MODERATE:
-            reasons.append("Balanced tone with engaging storytelling")
+        elif mood == Mood.CURIOUS:
+            reasons.append("Great for curiosity and discovery")
 
     return ". ".join(reasons[:2]) if reasons else None
 
@@ -72,7 +89,7 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
     results = []
 
     for show in shows:
-        # ---------- Hard filters ----------
+        # ---------- Hard filters (unchanged) ----------
 
         rating = show.get("content_rating")
         if rating:
@@ -109,9 +126,10 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
         if common_genres:
             score += len(common_genres)
 
-        intensity_genres = _INTENSITY_GENRE_MAP.get(user_input.content_intensity, set())
-        intensity_matched = bool(show_genres & intensity_genres)
-        if intensity_matched:
+        # Mood as a soft signal (genre overlap with mood mapping)
+        mood_genres = _MOOD_GENRE_MAP.get(user_input.mood, set())
+        mood_matched = bool(show_genres & mood_genres)
+        if mood_matched:
             score += 1
 
         recommendation_reason = _build_recommendation_reason(
@@ -120,8 +138,8 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
             seasons=seasons,
             episode_length=episode_length,
             episode_length_pref=user_input.episode_length_preference,
-            intensity_matched=intensity_matched,
-            intensity=user_input.content_intensity,
+            mood_matched=mood_matched,
+            mood=user_input.mood,
         )
 
         results.append(
