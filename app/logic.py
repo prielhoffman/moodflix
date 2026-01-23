@@ -9,6 +9,7 @@ from app.schemas import (
     WatchingContext,
 )
 from app.data import get_all_shows
+from app.tmdb import search_tv_show
 
 
 # -------------------- Safety --------------------
@@ -16,8 +17,6 @@ _ADULT_RATINGS = {"TV-MA"}
 
 
 # -------------------- Mood → Genre soft mapping --------------------
-# Mood represents how the user wants to feel.
-# This mapping is used only as a SOFT signal (scoring), never as a filter.
 _MOOD_GENRE_MAP = {
     Mood.CHILL: {"comedy", "slice of life", "lifestyle", "animation", "documentary", "design"},
     Mood.HAPPY: {"comedy", "romance", "family", "musical", "talent", "cooking"},
@@ -39,32 +38,24 @@ def _build_recommendation_reason(
     mood_matched: bool,
     mood: Mood,
 ) -> str | None:
-    """
-    Build a short, user-friendly recommendation reason
-    using the strongest 1–2 matching signals.
-    """
     reasons = []
 
-    # 1. Genre overlap (highest priority)
     if common_genres:
         reasons.append(
             f"Matches your interest in {', '.join(sorted(common_genres))}"
         )
 
-    # 2. Binge / commitment preference
     if binge_preference == BingePreference.SHORT_SERIES and seasons <= 3:
-        reasons.append("Easy to finish in a few days")
+        reasons.append("Easy to finish in one season")
     elif binge_preference == BingePreference.BINGE and seasons > 3:
         reasons.append("Great for binge watching")
 
-    # 3. Episode length preference
     if episode_length is not None:
         if episode_length_pref == EpisodeLengthPreference.SHORT and episode_length <= 30:
             reasons.append("Short, easy-to-watch episodes")
         elif episode_length_pref == EpisodeLengthPreference.LONG and episode_length > 30:
             reasons.append("Long, immersive episodes")
 
-    # 4. Mood (soft, descriptive)
     if mood_matched:
         if mood == Mood.CHILL:
             reasons.append("Relaxed and easy to watch")
@@ -122,13 +113,15 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
 
         user_genres = set(g.lower() for g in user_input.preferred_genres)
         show_genres = set(g.lower() for g in show.get("genres", []))
+
         common_genres = user_genres & show_genres
         if common_genres:
             score += len(common_genres)
 
-        # Mood as a soft signal (genre overlap with mood mapping)
+        # Mood soft signal
         mood_genres = _MOOD_GENRE_MAP.get(user_input.mood, set())
         mood_matched = bool(show_genres & mood_genres)
+
         if mood_matched:
             score += 1
 
@@ -142,6 +135,10 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
             mood=user_input.mood,
         )
 
+        # ---------- TMDB Enrichment ----------
+        # Fetch external metadata for this show
+        tmdb_data = search_tv_show(show["title"])
+
         results.append(
             {
                 "score": score,
@@ -154,9 +151,16 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
                     average_episode_length=show["average_episode_length"],
                     number_of_seasons=show["number_of_seasons"],
                     language=show["language"],
+
+                    # TMDB fields (may be None)
+                    poster_url=tmdb_data.get("poster_url") if tmdb_data else None,
+                    tmdb_rating=tmdb_data.get("rating") if tmdb_data else None,
+                    tmdb_overview=tmdb_data.get("overview") if tmdb_data else None,
+                    first_air_date=tmdb_data.get("first_air_date") if tmdb_data else None,
                 ),
             }
         )
 
     results.sort(key=lambda x: x["score"], reverse=True)
+
     return [item["show"] for item in results]
