@@ -1,8 +1,10 @@
-# 📺 MoodFlix
+# 🎬 MoodFlix
 
 MoodFlix is a backend-first web application that recommends TV shows based on the user’s **mood**, **watching preferences**, and **context**.
 
 The project is designed with clean architecture principles, focusing on separation of concerns, testability, and future extensibility toward a full Netflix-like experience.
+
+The project was developed with the assistance of AI tools (ChatGPT) for architecture design, testing strategy, and code review.
 
 ---
 
@@ -18,6 +20,7 @@ The project is designed with clean architecture principles, focusing on separati
 - TMDB integration for posters and metadata
 - Graceful handling of external API failures
 - Fully tested recommendation logic
+- React-based frontend interface
 
 ---
 
@@ -93,10 +96,48 @@ app/
   schemas.py    # Pydantic models
   tmdb.py       # TMDB external API adapter
 
+frontend/
+  public/
+  src/
+    api/         # API communication
+    assets/      # Images and static files
+    components/  # React components
+    App.jsx
+    App.css
+    main.jsx
+    index.css
+
 tests/
   test_logic.py # Recommendation logic tests
   test_tmdb.py  # TMDB integration tests
 ```
+
+---
+
+## 💻 Frontend
+
+The frontend is built with **React (Vite)** and provides:
+
+- User preference form
+- Recommendation results view
+- Netflix-style layout foundation
+- API integration with FastAPI backend
+
+Future UI enhancements will include carousels and personalization features.
+
+---
+
+## 🤖 AI-Assisted Development
+
+This project was developed with the assistance of AI tools (ChatGPT) for:
+
+- System design and architecture planning
+- Writing and refining tests
+- Code review and refactoring
+- Debugging and troubleshooting
+- Documentation support
+
+All architectural and technical decisions were reviewed and validated by the developer.
 
 ---
 
@@ -106,15 +147,11 @@ MoodFlix requires a TMDB API key.
 
 Create a `.env` file in the project root:
 
-```
 TMDB_API_KEY=your_tmdb_api_key_here
-```
 
 Install dependencies:
 
-```bash
 pip install -r requirements.txt
-```
 
 Run the API:
 
@@ -122,11 +159,9 @@ Run the API:
 uvicorn app.api:app --reload
 ```
 
-Swagger UI will be available at:
+Swagger UI:
 
-```
 http://127.0.0.1:8000/docs
-```
 
 ---
 
