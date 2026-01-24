@@ -1,33 +1,74 @@
-// Base URL of your FastAPI backend
-// Adjust if your backend runs on a different host/port
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 /*
-  Send user preferences to the backend
-  and return the list of recommendations.
+  Fetch recommendations from backend
 */
 export async function recommendShows(preferences) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/recommend`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(preferences),
-    });
+  const response = await fetch(`${API_BASE_URL}/recommend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(preferences),
+  });
 
-    // If the server returned an error status
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || "Failed to fetch recommendations");
-    }
-
-    // Parse JSON response
-    const data = await response.json();
-
-    return data;
-  } catch (error) {
-    console.error("API error:", error);
-    throw error;
+  if (!response.ok) {
+    throw new Error("Failed to fetch recommendations");
   }
+
+  return response.json();
+}
+
+
+/*
+  Add show to watchlist
+*/
+export async function addToWatchlist(title) {
+  const response = await fetch(`${API_BASE_URL}/watchlist/add`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to add to watchlist");
+  }
+
+  return response.json();
+}
+
+
+/*
+  Remove show from watchlist
+*/
+export async function removeFromWatchlist(title) {
+  const response = await fetch(`${API_BASE_URL}/watchlist/remove`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to remove from watchlist");
+  }
+
+  return response.json();
+}
+
+
+/*
+  Get full watchlist
+*/
+export async function fetchWatchlist() {
+  const response = await fetch(`${API_BASE_URL}/watchlist`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch watchlist");
+  }
+
+  return response.json();
 }

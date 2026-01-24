@@ -1,30 +1,49 @@
 import "./App.css";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// Import the PreferenceForm component
 import PreferenceForm from "./components/PreferenceForm";
 
-// Import the API helper
-import { recommendShows } from "./api/moodflixApi";
+import {
+  recommendShows,
+  addToWatchlist,
+  removeFromWatchlist,
+  fetchWatchlist,
+} from "./api/moodflixApi";
+
 
 function App() {
-  // Controls whether we show Home screen or Form screen
   const [showForm, setShowForm] = useState(false);
 
-  // Stores recommendation results
   const [recommendations, setRecommendations] = useState([]);
 
-  // Loading state while waiting for backend
+  const [watchlist, setWatchlist] = useState([]);
+
   const [isLoading, setIsLoading] = useState(false);
 
-  // Error message (if something goes wrong)
   const [error, setError] = useState(null);
 
-  // Reference to the scroll container (for arrows)
+  const [savingTitle, setSavingTitle] = useState(null);
+
   const carouselRef = useRef(null);
 
-  // Called when the form is submitted
+
+  /* Load watchlist when app starts */
+  useEffect(() => {
+    loadWatchlist();
+  }, []);
+
+
+  async function loadWatchlist() {
+    try {
+      const data = await fetchWatchlist();
+      setWatchlist(data.watchlist);
+    } catch (err) {
+      console.error("Failed to load watchlist");
+    }
+  }
+
+
   async function handleFormSubmit(preferences) {
     setIsLoading(true);
     setError(null);
@@ -33,6 +52,9 @@ function App() {
     try {
       const results = await recommendShows(preferences);
       setRecommendations(results);
+
+      // Refresh watchlist after new recommendations
+      await loadWatchlist();
     } catch (err) {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -40,7 +62,7 @@ function App() {
     }
   }
 
-  // Scroll carousel left/right
+
   function scrollCarousel(direction) {
     if (!carouselRef.current) return;
 
@@ -52,10 +74,39 @@ function App() {
     });
   }
 
+
+  function isSaved(title) {
+    return watchlist.includes(title);
+  }
+
+
+  async function toggleSave(title) {
+    if (savingTitle) return;
+
+    setSavingTitle(title);
+
+    try {
+      let data;
+
+      if (isSaved(title)) {
+        data = await removeFromWatchlist(title);
+      } else {
+        data = await addToWatchlist(title);
+      }
+
+      setWatchlist(data.watchlist);
+    } catch (err) {
+      console.error("Failed to update watchlist");
+    } finally {
+      setSavingTitle(null);
+    }
+  }
+
+
   return (
     <div className="app-container">
       {!showForm ? (
-        // ---------------- Home Screen ----------------
+        /* ---------------- Home Screen ---------------- */
         <div className="home-screen">
           <h1>MoodFlix 📺</h1>
 
@@ -69,9 +120,8 @@ function App() {
           </button>
         </div>
       ) : (
-        // ---------------- Form + Results Screen ----------------
+        /* ---------------- Form + Results Screen ---------------- */
         <div className="form-screen">
-          {/* Back button */}
           <button
             onClick={() => setShowForm(false)}
             className="back-button"
@@ -79,24 +129,20 @@ function App() {
             ← Back
           </button>
 
-          {/* Preference form */}
           <PreferenceForm onSubmit={handleFormSubmit} />
 
-          {/* Loading state */}
           {isLoading && (
             <p className="loading-text">Loading recommendations...</p>
           )}
 
-          {/* Error state */}
           {error && <p className="error-text">{error}</p>}
 
-          {/* Results */}
+
           {!isLoading && !error && recommendations.length > 0 && (
             <div className="results-section">
               <h3>Recommended for you</h3>
 
               <div className="carousel-wrapper">
-                {/* Left Arrow */}
                 <button
                   className="carousel-arrow left"
                   onClick={() => scrollCarousel("left")}
@@ -104,47 +150,61 @@ function App() {
                   ←
                 </button>
 
-                {/* Scroll Container */}
                 <div className="carousel-container" ref={carouselRef}>
-                  {recommendations.map((show, index) => (
-                    <div key={index} className="poster-card">
-                      {/* Poster */}
-                      {show.poster_url ? (
-                        <img
-                          src={show.poster_url}
-                          alt={show.title}
-                          className="poster-image"
-                        />
-                      ) : (
-                        <div className="poster-placeholder">
-                          No Image
-                        </div>
-                      )}
+                  {recommendations.map((show, index) => {
+                    const saved = isSaved(show.title);
 
-                      {/* Card content */}
-                      <div className="card-content">
-                        <h4 className="card-title">{show.title}</h4>
+                    return (
+                      <div key={index} className="poster-card">
 
-                        {show.tmdb_rating && (
-                          <p className="card-rating">
-                            ⭐ {show.tmdb_rating.toFixed(1)}
-                          </p>
+                        {/* Save Button */}
+                        <button
+                          className={`save-button ${saved ? "saved" : ""}`}
+                          disabled={savingTitle === show.title}
+                          onClick={() => toggleSave(show.title)}
+                        >
+                          {saved ? "❤️ Saved" : "♡ Save"}
+                        </button>
+
+
+                        {/* Poster */}
+                        {show.poster_url ? (
+                          <img
+                            src={show.poster_url}
+                            alt={show.title}
+                            className="poster-image"
+                          />
+                        ) : (
+                          <div className="poster-placeholder">
+                            No Image
+                          </div>
                         )}
 
-                        <p className="card-summary">
-                          {show.short_summary}
-                        </p>
 
-                        <p className="card-reason">
-                          <strong>Why:</strong>{" "}
-                          {show.recommendation_reason || "Good match for you"}
-                        </p>
+                        {/* Card Content */}
+                        <div className="card-content">
+                          <h4 className="card-title">{show.title}</h4>
+
+                          {show.tmdb_rating && (
+                            <p className="card-rating">
+                              ⭐ {show.tmdb_rating.toFixed(1)}
+                            </p>
+                          )}
+
+                          <p className="card-summary">
+                            {show.short_summary}
+                          </p>
+
+                          <p className="card-reason">
+                            <strong>Why:</strong>{" "}
+                            {show.recommendation_reason || "Good match for you"}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* Right Arrow */}
                 <button
                   className="carousel-arrow right"
                   onClick={() => scrollCarousel("right")}
