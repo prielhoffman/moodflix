@@ -230,3 +230,115 @@ def test_recommendation_reason_mentions_mood_when_matched():
         )
         for show in results
     )
+
+# -------------------- TMDB Integration Tests --------------------
+
+
+def test_tmdb_returns_none_does_not_break_logic(monkeypatch):
+    """
+    If TMDB returns None for all shows,
+    recommendations should still work and all TMDB fields should be None.
+    """
+
+    def mock_search_tv_show(title):
+        return None
+
+    # Patch search_tv_show inside logic.py
+    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+
+    user_input = RecommendationInput(
+        age=30,
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.CHILL,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.ALONE,
+    )
+
+    results = recommend_shows(user_input)
+
+    assert results
+    assert len(results) > 0
+
+    for show in results:
+        assert show.poster_url is None
+        assert show.tmdb_rating is None
+        assert show.tmdb_overview is None
+        assert show.first_air_date is None
+
+
+def test_tmdb_returns_valid_metadata(monkeypatch):
+    """
+    If TMDB returns valid metadata,
+    it should be merged correctly into all results.
+    """
+
+    mocked_tmdb_data = {
+        "poster_url": "https://example.com/poster.jpg",
+        "rating": 8.5,
+        "overview": "Test overview",
+        "first_air_date": "2021-01-01",
+    }
+
+    def mock_search_tv_show(title):
+        return mocked_tmdb_data
+
+    # Patch search_tv_show inside logic.py
+    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+
+    user_input = RecommendationInput(
+        age=25,
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.HAPPY,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.ALONE,
+    )
+
+    results = recommend_shows(user_input)
+
+    assert results
+    assert len(results) > 0
+
+    for show in results:
+        assert show.poster_url == mocked_tmdb_data["poster_url"]
+        assert show.tmdb_rating == mocked_tmdb_data["rating"]
+        assert show.tmdb_overview == mocked_tmdb_data["overview"]
+        assert show.first_air_date == mocked_tmdb_data["first_air_date"]
+
+
+def test_tmdb_enrichment_does_not_affect_existing_filters(monkeypatch):
+    """
+    TMDB enrichment should not affect existing business rules,
+    such as excluding TV-MA content for family context.
+    """
+
+    def mock_search_tv_show(title):
+        return {
+            "poster_url": "https://example.com/poster.jpg",
+            "rating": 9.0,
+            "overview": "Overview",
+            "first_air_date": "2022-01-01",
+        }
+
+    # Patch search_tv_show inside logic.py
+    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+
+    user_input = RecommendationInput(
+        age=35,
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.FOCUSED,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.FAMILY,
+    )
+
+    results = recommend_shows(user_input)
+
+    assert results
+
+    # Existing safety rule: no TV-MA in family context
+    assert all(show.content_rating != "TV-MA" for show in results)
