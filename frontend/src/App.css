@@ -20,7 +20,6 @@ body {
   align-items: center;
 }
 
-
 /* Home screen layout */
 .home-screen {
   text-align: center;
@@ -28,7 +27,6 @@ body {
   width: 100%;
   padding: 2rem;
 }
-
 
 /* Title */
 .home-screen h1 {
@@ -57,4 +55,174 @@ body {
 
 .primary-button:hover {
   background-color: #4f46e5;
+}
+
+/* ---------------- Results Section ---------------- */
+
+.results-section {
+  margin-top: 40px;
+  width: 100%;
+}
+
+.results-section h3 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* ---------------- Carousel Layout ---------------- */
+
+.carousel-wrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.carousel-container {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 10px;
+
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.carousel-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Arrow buttons */
+
+.carousel-arrow {
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  font-size: 22px;
+  width: 40px;
+  height: 60px;
+  cursor: pointer;
+  border-radius: 6px;
+  z-index: 2;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  transition: background 0.2s ease;
+}
+
+.carousel-arrow:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.carousel-arrow.left {
+  margin-right: 6px;
+}
+
+.carousel-arrow.right {
+  margin-left: 6px;
+}
+
+/* ---------------- Poster Card ---------------- */
+
+.poster-card {
+  background-color: #141414;
+  border-radius: 10px;
+  overflow: hidden;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  min-width: 180px;
+  max-width: 180px;
+  flex-shrink: 0;
+}
+
+.poster-card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Poster image */
+
+.poster-image {
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Placeholder when no poster */
+
+.poster-placeholder {
+  width: 100%;
+  height: 260px;
+  background-color: #333;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* ---------------- Card Content ---------------- */
+
+.card-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-title {
+  font-size: 16px;
+  margin: 0;
+}
+
+.card-rating {
+  font-size: 14px;
+  color: #ffd700;
+}
+
+.card-summary {
+  font-size: 13px;
+  color: #ddd;
+  line-height: 1.4;
+}
+
+.card-reason {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+/* ---------------- Loading ---------------- */
+
+.loading-text {
+  text-align: center;
+  margin-top: 20px;
+  font-style: italic;
+}
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 600px) {
+  .poster-card {
+    min-width: 140px;
+    max-width: 140px;
+  }
+
+  .poster-image,
+  .poster-placeholder {
+    height: 200px;
+  }
+
+  .carousel-arrow {
+    width: 32px;
+    height: 50px;
+    font-size: 18px;
+  }
 }

@@ -125,3 +125,17 @@ class RecommendationOutput(BaseModel):
         None,
         description="First air date from TMDB",
     )
+
+
+# --------------------------------- WATCHLIST ---------------------------------
+
+
+class SaveRequest(BaseModel):
+    title: str = Field(..., description="Title of the show to save/remove")
+
+
+class WatchlistResponse(BaseModel):
+    watchlist: List[str] = Field(
+        default_factory=list,
+        description="List of saved show titles",
+    )

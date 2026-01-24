@@ -1,6 +1,6 @@
 import "./App.css";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 // Import the PreferenceForm component
 import PreferenceForm from "./components/PreferenceForm";
@@ -21,26 +21,35 @@ function App() {
   // Error message (if something goes wrong)
   const [error, setError] = useState(null);
 
+  // Reference to the scroll container (for arrows)
+  const carouselRef = useRef(null);
+
   // Called when the form is submitted
   async function handleFormSubmit(preferences) {
-    // Reset previous state
     setIsLoading(true);
     setError(null);
     setRecommendations([]);
 
     try {
-      // Call backend API
       const results = await recommendShows(preferences);
-
-      // Save results in state
       setRecommendations(results);
     } catch (err) {
-      // Show basic error message
       setError("Something went wrong. Please try again.");
     } finally {
-      // Stop loading in all cases
       setIsLoading(false);
     }
+  }
+
+  // Scroll carousel left/right
+  function scrollCarousel(direction) {
+    if (!carouselRef.current) return;
+
+    const scrollAmount = 400;
+
+    carouselRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
   }
 
   return (
@@ -74,7 +83,9 @@ function App() {
           <PreferenceForm onSubmit={handleFormSubmit} />
 
           {/* Loading state */}
-          {isLoading && <p>Loading recommendations...</p>}
+          {isLoading && (
+            <p className="loading-text">Loading recommendations...</p>
+          )}
 
           {/* Error state */}
           {error && <p className="error-text">{error}</p>}
@@ -84,22 +95,63 @@ function App() {
             <div className="results-section">
               <h3>Recommended for you</h3>
 
-              {recommendations.map((show, index) => (
-                <div key={index} className="recommendation-card">
-                  <h4>{show.title}</h4>
+              <div className="carousel-wrapper">
+                {/* Left Arrow */}
+                <button
+                  className="carousel-arrow left"
+                  onClick={() => scrollCarousel("left")}
+                >
+                  ←
+                </button>
 
-                  <p>{show.short_summary}</p>
+                {/* Scroll Container */}
+                <div className="carousel-container" ref={carouselRef}>
+                  {recommendations.map((show, index) => (
+                    <div key={index} className="poster-card">
+                      {/* Poster */}
+                      {show.poster_url ? (
+                        <img
+                          src={show.poster_url}
+                          alt={show.title}
+                          className="poster-image"
+                        />
+                      ) : (
+                        <div className="poster-placeholder">
+                          No Image
+                        </div>
+                      )}
 
-                  <p>
-                    <strong>Why:</strong>{" "}
-                    {show.recommendation_reason || "Good match for you"}
-                  </p>
+                      {/* Card content */}
+                      <div className="card-content">
+                        <h4 className="card-title">{show.title}</h4>
 
-                  <p>
-                    <strong>Genres:</strong> {show.genres.join(", ")}
-                  </p>
+                        {show.tmdb_rating && (
+                          <p className="card-rating">
+                            ⭐ {show.tmdb_rating.toFixed(1)}
+                          </p>
+                        )}
+
+                        <p className="card-summary">
+                          {show.short_summary}
+                        </p>
+
+                        <p className="card-reason">
+                          <strong>Why:</strong>{" "}
+                          {show.recommendation_reason || "Good match for you"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+
+                {/* Right Arrow */}
+                <button
+                  className="carousel-arrow right"
+                  onClick={() => scrollCarousel("right")}
+                >
+                  →
+                </button>
+              </div>
             </div>
           )}
         </div>
