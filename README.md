@@ -1,75 +1,128 @@
-# MoodFlix 📺
+# 📺 MoodFlix
 
-**MoodFlix** is a backend service that recommends TV shows based on **how the user wants to feel**, alongside personal preferences such as age, binge preference, genres, episode length, language, and watching context.
+MoodFlix is a backend-first web application that recommends TV shows based on the user’s **mood**, **watching preferences**, and **context**.
 
-This project is an **MVP backend application** built for learning and portfolio purposes, with a strong focus on **emotional-based recommendations**, clean architecture, explainable logic, and testability.
-
----
-
-## What MoodFlix Does
-
-* Receives user preferences (including mood) via a REST API
-* Uses mood as a **soft signal** to influence ranking (not filtering)
-* Applies simple, explainable recommendation rules
-* Returns a ranked list of TV show recommendations
-* Ensures content safety based on age and watching context
+The project is designed with clean architecture principles, focusing on separation of concerns, testability, and future extensibility toward a full Netflix-like experience.
 
 ---
 
-## Main Features
+## ✨ Key Features
 
-* FastAPI-based API layer
-* Clear separation between API, business logic, and data
-* Pydantic models for input and output validation
-* Mood-driven recommendation logic (emotion as intent)
-* Human-readable recommendation explanations
-* Unit tests covering safety, preferences, and mood behavior
-* Docker support for easy containerized execution
+- Mood-based TV show recommendations
+- Preference-aware filtering:
+  - Age & family safety
+  - Binge vs short series
+  - Episode length
+  - Language
+- Explainable recommendations (why a show was suggested)
+- TMDB integration for posters and metadata
+- Graceful handling of external API failures
+- Fully tested recommendation logic
 
 ---
 
-## Project Structure
+## 🧠 Recommendation Logic
+
+Recommendations are generated using a multi-stage pipeline:
+
+1. **Hard filters**
+   - Age restrictions
+   - Family-safe content
+   - Binge / short-series preference
+   - Episode length
+   - Language
+
+2. **Soft matching**
+   - Preferred genres
+   - Mood → genre affinity mapping
+   - Mood affects ranking, not filtering
+
+3. **Explainability**
+   - Each recommendation may include a short human-readable reason explaining the match
+
+4. **External enrichment**
+   - Posters, ratings, and summaries are fetched from TMDB
+   - Failures do not break recommendations
+
+---
+
+## 🌐 TMDB Integration
+
+MoodFlix uses **The Movie Database (TMDB)** API to enrich recommendations with:
+
+- Poster images
+- Ratings
+- Overviews
+- First air date
+
+TMDB is treated as an **external enrichment layer**, isolated from business logic.
+
+If TMDB is unavailable or returns incomplete data, recommendations still work correctly.
+
+---
+
+## 🧪 Testing Strategy
+
+The project includes comprehensive tests using `pytest`:
+
+### Recommendation Logic Tests
+- Safety rules (age, family context)
+- Binge and episode length preferences
+- Genre matching
+- Mood-based ranking
+- Recommendation reason generation
+
+### TMDB Integration Tests
+- TMDB returning no results
+- Missing poster data
+- Valid metadata mapping
+- Network/API failures
+- Ensuring enrichment does not affect core logic
+
+All external API calls are mocked — no real network access during tests.
+
+---
+
+## 🗂 Project Structure
 
 ```
 app/
-  api.py        # FastAPI API layer (input/output only)
-  logic.py      # Recommendation and mood-based ranking logic
-  schemas.py    # Input/output data models
-  data.py       # Static TV show dataset
+  api.py        # FastAPI routes
+  logic.py      # Recommendation engine
+  data.py       # Show dataset (temporary, will be replaced by DB)
+  schemas.py    # Pydantic models
+  tmdb.py       # TMDB external API adapter
+
 tests/
-  test_logic.py # Unit tests for recommendation logic
+  test_logic.py # Recommendation logic tests
+  test_tmdb.py  # TMDB integration tests
 ```
 
 ---
 
-## Tech Stack
+## ⚙️ Environment Setup
 
-* Python 3.x
-* FastAPI
-* Pydantic
-* pytest
-* Docker
+MoodFlix requires a TMDB API key.
 
----
+Create a `.env` file in the project root:
 
-## Running the Project
+```
+TMDB_API_KEY=your_tmdb_api_key_here
+```
 
-### Run Locally (Python)
-
-1. Create and activate a virtual environment
-2. Install dependencies:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Start the API:
+Run the API:
 
 ```bash
 uvicorn app.api:app --reload
 ```
 
-4. Open API docs:
+Swagger UI will be available at:
 
 ```
 http://127.0.0.1:8000/docs
@@ -77,101 +130,30 @@ http://127.0.0.1:8000/docs
 
 ---
 
-### Run with Docker
+## 🚀 Roadmap
 
-1. Build the Docker image:
-
-```bash
-docker build -t moodflix .
-```
-
-2. Run the container:
-
-```bash
-docker run -p 8000:8000 moodflix
-```
-
-3. Access the API at:
-
-```
-http://localhost:8000/docs
-```
+- Frontend UI with Netflix-style poster cards
+- Carousel-based browsing
+- User accounts & watch history
+- Personalization based on past selections
+- Database integration
+- Recommendation feedback loop (“this helped / didn’t help”)
 
 ---
 
-## Example API Request
+## 📝 Notes
 
-**Endpoint:** `POST /recommend`
-
-```json
-{
-  "age": 25,
-  "binge_preference": "binge",
-  "preferred_genres": ["comedy", "crime"],
-  "mood": "chill",
-  "language_preference": "English",
-  "episode_length_preference": "short",
-  "watching_context": "alone"
-}
-```
+- Current show data is temporary and used for logic validation
+- Future versions will replace static data with a database
+- The project prioritizes correctness, clarity, and extensibility over premature optimization
 
 ---
 
-## Mood-Based Recommendation Logic
+## 💡 Why this project?
 
-MoodFlix treats **mood as emotional intent**, not a strict filter.
+MoodFlix is built as a learning and portfolio project to demonstrate:
 
-* Mood influences **ranking**, not eligibility
-* Multiple moods are supported (e.g. chill, happy, focused, adrenaline, dark, curious)
-* Mood is mapped to genres as a **soft signal**
-* Recommendation explanations reflect the strongest 1–2 matching signals
-
-Example explanation:
-
-> “Matches your interest in comedy and feels relaxed and easy to watch.”
-
----
-
-## Testing Strategy
-
-* Core recommendation rules are covered with unit tests
-* Tests verify:
-
-  * Safety rules (age and family context)
-  * Binge and episode-length preferences
-  * Mood as a soft signal (does not filter shows)
-  * Mood impact on ranking order
-  * Honest, user-facing recommendation explanations
-
----
-
-## Use of AI Tools
-
-This project was developed with the **assistance of AI tools** as part of an iterative design and learning process.
-
-AI was used to:
-
-* Brainstorm feature ideas and mood modeling concepts
-* Refine recommendation logic and prioritization strategies
-* Improve code clarity, naming, and structure
-* Design meaningful unit tests and edge-case coverage
-* Review prompts, explanations, and documentation
-
-All architectural decisions, logic design, and final code integration were **reviewed, adapted, and intentionally implemented** by the author.
-
----
-
-## Notes
-
-* TV show data is static and manually curated
-* Logic is intentionally simple and explainable
-* Designed to be extended in future versions:
-
-  * External APIs (e.g. IMDb)
-  * Richer mood modeling
-  * Frontend UI
-  * Persistence and user profiles
-
----
-
-**MoodFlix** demonstrates backend fundamentals, emotional-aware recommendation logic, thoughtful use of AI-assisted development, and clean, testable architecture — in a portfolio-ready project.
+- Clean backend architecture
+- Real-world API integration
+- Thoughtful testing
+- Product-oriented decision making
