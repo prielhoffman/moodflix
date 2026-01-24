@@ -1,74 +1,219 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+// src/api/moodflixApi.js
+
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  "http://127.0.0.1:8000";
 
 /*
-  Fetch recommendations from backend
+  Local poster cache.
+  Used to keep poster URLs for watchlist
+  even if backend returns only titles.
 */
+const POSTER_CACHE_KEY = "moodflix_poster_cache_v1";
+
+function loadPosterCache() {
+  try {
+    return JSON.parse(localStorage.getItem(POSTER_CACHE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePosterCache(cache) {
+  try {
+    localStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+}
+
+/*
+  Save posters from recommendation results
+  into local cache.
+*/
+function cacheShowsPosters(shows) {
+  if (!Array.isArray(shows)) return;
+
+  const cache = loadPosterCache();
+  let changed = false;
+
+  for (const show of shows) {
+    const title = show?.title;
+    const poster = show?.poster_url;
+
+    if (title && poster && !cache[title]) {
+      cache[title] = poster;
+      changed = true;
+    }
+  }
+
+  if (changed) savePosterCache(cache);
+}
+
+/*
+  Normalize backend watchlist response
+  into unified format:
+  [{ title, poster_url }]
+*/
+function normalizeWatchlist(rawWatchlist) {
+  const cache = loadPosterCache();
+
+  if (!Array.isArray(rawWatchlist)) return [];
+
+  // If backend returns ["title1", "title2"]
+  if (rawWatchlist.length > 0 && typeof rawWatchlist[0] === "string") {
+    return rawWatchlist.map((title) => ({
+      title,
+      poster_url: cache[title] || null,
+    }));
+  }
+
+  // If backend returns objects
+  return rawWatchlist
+    .map((item) => {
+      const title = item?.title;
+      if (!title) return null;
+
+      return {
+        title,
+        poster_url: item?.poster_url || cache[title] || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+/*
+  Generic JSON request helper
+*/
+async function requestJson(path, options = {}) {
+  const url = `${API_BASE}${path}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status} on ${path}: ${text}`);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+
+  if (!contentType.includes("application/json")) return {};
+
+  return await res.json();
+}
+
+/*
+  Try multiple possible backend paths
+  (for compatibility)
+*/
+async function tryPaths(paths, options) {
+  let lastError = null;
+
+  for (const path of paths) {
+    try {
+      return await requestJson(path, options);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("All paths failed");
+}
+
+/* ================= API FUNCTIONS ================= */
+
 export async function recommendShows(preferences) {
-  const response = await fetch(`${API_BASE_URL}/recommend`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(preferences),
-  });
+  const data = await tryPaths(
+    [
+      "/recommend",
+      "/api/recommend",
+      "/recommendations",
+      "/api/recommendations",
+    ],
+    {
+      method: "POST",
+      body: JSON.stringify(preferences),
+    }
+  );
 
-  if (!response.ok) {
-    throw new Error("Failed to fetch recommendations");
-  }
+  const shows = Array.isArray(data)
+    ? data
+    : data.recommendations || data.results || [];
 
-  return response.json();
+  cacheShowsPosters(shows);
+
+  return shows;
 }
 
-
 /*
-  Add show to watchlist
+  Supports both:
+  addToWatchlist("Title")
+  addToWatchlist(showObject)
 */
-export async function addToWatchlist(title) {
-  const response = await fetch(`${API_BASE_URL}/watchlist/add`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ title }),
-  });
+export async function addToWatchlist(input) {
+  const title = typeof input === "string" ? input : input?.title;
 
-  if (!response.ok) {
-    throw new Error("Failed to add to watchlist");
+  if (typeof input === "object" && input?.title && input?.poster_url) {
+    cacheShowsPosters([input]);
   }
 
-  return response.json();
+  if (!title) throw new Error("addToWatchlist: missing title");
+
+  const data = await tryPaths(
+    [
+      "/watchlist/add",
+      "/api/watchlist/add",
+      "/watchlist",
+      "/api/watchlist",
+    ],
+    {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }
+  );
+
+  const raw = data.watchlist ?? data.items ?? data.results ?? [];
+
+  return { watchlist: normalizeWatchlist(raw) };
 }
 
-
-/*
-  Remove show from watchlist
-*/
 export async function removeFromWatchlist(title) {
-  const response = await fetch(`${API_BASE_URL}/watchlist/remove`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ title }),
-  });
+  if (!title) throw new Error("removeFromWatchlist: missing title");
 
-  if (!response.ok) {
-    throw new Error("Failed to remove from watchlist");
-  }
+  const data = await tryPaths(
+    [
+      "/watchlist/remove",
+      "/api/watchlist/remove",
+      "/watchlist/delete",
+      "/api/watchlist/delete",
+      "/watchlist",
+      "/api/watchlist",
+    ],
+    {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    }
+  );
 
-  return response.json();
+  const raw = data.watchlist ?? data.items ?? data.results ?? [];
+
+  return { watchlist: normalizeWatchlist(raw) };
 }
 
-
-/*
-  Get full watchlist
-*/
 export async function fetchWatchlist() {
-  const response = await fetch(`${API_BASE_URL}/watchlist`);
+  const data = await tryPaths(
+    ["/watchlist", "/api/watchlist"],
+    { method: "GET" }
+  );
 
-  if (!response.ok) {
-    throw new Error("Failed to fetch watchlist");
-  }
+  const raw = data.watchlist ?? data.items ?? data.results ?? [];
 
-  return response.json();
+  return { watchlist: normalizeWatchlist(raw) };
 }
