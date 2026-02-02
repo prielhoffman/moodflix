@@ -1,6 +1,11 @@
 from typing import List
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+
+
+from app.db import get_db
 
 from app.schemas import (
     RecommendationInput,
@@ -29,6 +34,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# -------------------- Health Check --------------------
+
+@app.get("/health/db")
+def db_health(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "connected"}
 
 
 # -------------------- Recommendations --------------------
