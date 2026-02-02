@@ -141,27 +141,99 @@ All architectural and technical decisions were reviewed and validated by the dev
 
 ---
 
-## ⚙️ Environment Setup
+## 🚀 Getting Started
 
-MoodFlix requires a TMDB API key.
+### Prerequisites
 
-Create a `.env` file in the project root:
+- Python 3.8+ 
+- Node.js 16+ and npm
+- TMDB API key ([Get one here](https://www.themoviedb.org/settings/api))
 
-TMDB_API_KEY=your_tmdb_api_key_here
+### Installation
 
-Install dependencies:
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd MoodFlix
+   ```
 
-pip install -r requirements.txt
+2. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Run the API:
+3. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+### Environment Configuration
+
+1. **Copy the example environment file**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Edit `.env` and add your TMDB API key**
+   ```env
+   TMDB_API_KEY=your_actual_tmdb_api_key_here
+   ```
+
+   Optionally, configure the frontend API URL (defaults to `http://127.0.0.1:8000`):
+   ```env
+   VITE_API_BASE_URL=http://127.0.0.1:8000
+   ```
+
+   **Note:** The `.env` file is already in `.gitignore` and will not be committed to version control.
+
+### Running the Application
+
+#### Backend (FastAPI)
+
+Start the backend server:
 
 ```bash
 uvicorn app.api:app --reload
 ```
 
-Swagger UI:
+The API will be available at:
+- API: http://127.0.0.1:8000
+- Swagger UI: http://127.0.0.1:8000/docs
+- ReDoc: http://127.0.0.1:8000/redoc
 
-http://127.0.0.1:8000/docs
+#### Frontend (React/Vite)
+
+In a separate terminal, start the frontend development server:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will be available at http://localhost:5173
+
+### Running Tests
+
+Run all tests:
+
+```bash
+pytest
+```
+
+Run tests with verbose output:
+
+```bash
+pytest -v
+```
+
+Run specific test files:
+
+```bash
+pytest tests/test_logic.py
+pytest tests/test_tmdb.py
+```
 
 ---
 
