@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 # --------------------------------- INPUT ---------------------------------
@@ -139,3 +139,33 @@ class WatchlistResponse(BaseModel):
         default_factory=list,
         description="List of saved show titles",
     )
+
+# --------------------------------- AUTH ---------------------------------
+
+
+from pydantic import EmailStr
+from datetime import datetime
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserPublic(BaseModel):
+    id: int
+    email: EmailStr
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str

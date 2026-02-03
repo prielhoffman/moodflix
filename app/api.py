@@ -6,6 +6,8 @@ from sqlalchemy import text
 
 
 from app.db import get_db
+from app.routers import auth
+
 
 from app.schemas import (
     RecommendationInput,
@@ -24,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(title="MoodFlix")
+app.include_router(auth.router)
 
 
 # Enable CORS for frontend
