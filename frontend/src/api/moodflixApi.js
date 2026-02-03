@@ -1,5 +1,3 @@
-// src/api/moodflixApi.js
-
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
@@ -11,6 +9,7 @@ const API_BASE =
   even if backend returns only titles.
 */
 const POSTER_CACHE_KEY = "moodflix_poster_cache_v1";
+const ACCESS_TOKEN_KEY = "access_token";
 
 function loadPosterCache() {
   try {
@@ -23,6 +22,30 @@ function loadPosterCache() {
 function savePosterCache(cache) {
   try {
     localStorage.setItem(POSTER_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore
+  }
+}
+
+function getAccessToken() {
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setAccessToken(token) {
+  try {
+    localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  } catch {
+    // ignore
+  }
+}
+
+function clearAccessToken() {
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
   } catch {
     // ignore
   }
@@ -88,10 +111,12 @@ function normalizeWatchlist(rawWatchlist) {
 */
 async function requestJson(path, options = {}) {
   const url = `${API_BASE}${path}`;
+  const token = getAccessToken();
 
   const res = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
     ...options,
@@ -103,7 +128,6 @@ async function requestJson(path, options = {}) {
   }
 
   const contentType = res.headers.get("content-type") || "";
-
   if (!contentType.includes("application/json")) return {};
 
   return await res.json();
@@ -127,7 +151,43 @@ async function tryPaths(paths, options) {
   throw lastError || new Error("All paths failed");
 }
 
-/* ================= API FUNCTIONS ================= */
+/* ================= AUTH ================= */
+
+export async function register(email, password) {
+  if (!email || !password) throw new Error("register: missing email/password");
+
+  // Backend expects { email, password }
+  const data = await requestJson("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  return data; // { id, email, created_at }
+}
+
+export async function login(email, password) {
+  if (!email || !password) throw new Error("login: missing email/password");
+
+  const data = await requestJson("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  // Backend returns { access_token, token_type }
+  if (data?.access_token) setAccessToken(data.access_token);
+
+  return data;
+}
+
+export function logout() {
+  clearAccessToken();
+}
+
+export async function fetchMe() {
+  return await requestJson("/auth/me", { method: "GET" });
+}
+
+/* ================= RECOMMENDATIONS ================= */
 
 export async function recommendShows(preferences) {
   const data = await tryPaths(
@@ -148,9 +208,10 @@ export async function recommendShows(preferences) {
     : data.recommendations || data.results || [];
 
   cacheShowsPosters(shows);
-
   return shows;
 }
+
+/* ================= WATCHLIST ================= */
 
 /*
   Supports both:
@@ -180,7 +241,6 @@ export async function addToWatchlist(input) {
   );
 
   const raw = data.watchlist ?? data.items ?? data.results ?? [];
-
   return { watchlist: normalizeWatchlist(raw) };
 }
 
@@ -203,7 +263,6 @@ export async function removeFromWatchlist(title) {
   );
 
   const raw = data.watchlist ?? data.items ?? data.results ?? [];
-
   return { watchlist: normalizeWatchlist(raw) };
 }
 
@@ -214,6 +273,5 @@ export async function fetchWatchlist() {
   );
 
   const raw = data.watchlist ?? data.items ?? data.results ?? [];
-
   return { watchlist: normalizeWatchlist(raw) };
 }

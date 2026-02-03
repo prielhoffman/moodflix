@@ -169,3 +169,7 @@ class UserPublic(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+# ----------------------------------------------------
+class WatchlistTitle(BaseModel):
+    title: str
