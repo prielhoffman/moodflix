@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Date, Float, JSON, DateTime, func, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.db import Base
@@ -24,3 +24,22 @@ class WatchlistItem(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
 
     user = relationship("User", back_populates="watchlist_items")
+
+
+class Show(Base):
+    __tablename__ = "shows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tmdb_id = Column(Integer, unique=True, index=True, nullable=False)
+
+    title = Column(String, nullable=False)
+    overview = Column(String, nullable=True)
+    poster_url = Column(String, nullable=True)
+
+    genres = Column(JSON, nullable=True)  # store list of genre names or ids
+    popularity = Column(Float, nullable=True)
+    vote_average = Column(Float, nullable=True)
+    vote_count = Column(Integer, nullable=True)
+    first_air_date = Column(Date, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

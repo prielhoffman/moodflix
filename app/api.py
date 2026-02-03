@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.models import Show
 from app.db import get_db
 from app.routers import auth, watchlist
 from app.schemas import RecommendationInput, RecommendationOutput
@@ -39,3 +40,8 @@ def recommend(input_data: RecommendationInput):
     Receive user preferences and return TV show recommendations.
     """
     return recommend_shows(input_data)
+
+
+@app.get("/debug/shows")
+def debug_shows(db: Session = Depends(get_db)):
+    return db.query(Show).limit(5).all()
