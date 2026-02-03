@@ -145,7 +145,9 @@ All architectural and technical decisions were reviewed and validated by the dev
 
 ### Prerequisites
 
-- Python 3.8+ 
+- **Python 3.12.x** (recommended for compatibility with SQLAlchemy)
+  - ⚠️ **Note:** Python 3.13 is not currently supported due to compatibility issues with SQLAlchemy 2.0.25
+  - See [Windows Setup Guide](docs/setup.md) for detailed installation instructions
 - Node.js 16+ and npm
 - TMDB API key ([Get one here](https://www.themoviedb.org/settings/api))
 
@@ -157,12 +159,32 @@ All architectural and technical decisions were reviewed and validated by the dev
    cd MoodFlix
    ```
 
-2. **Install Python dependencies**
+2. **Create a virtual environment** (recommended)
+   
+   **Windows PowerShell:**
+   ```powershell
+   python3.12 -m venv venv
+   .\venv\Scripts\Activate.ps1
+   ```
+   
+   **Windows Git Bash:**
+   ```bash
+   python3.12 -m venv venv
+   source venv/Scripts/activate
+   ```
+   
+   **macOS/Linux:**
+   ```bash
+   python3.12 -m venv venv
+   source venv/bin/activate
+   ```
+
+3. **Install Python dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Install frontend dependencies**
+4. **Install frontend dependencies**
    ```bash
    cd frontend
    npm install
