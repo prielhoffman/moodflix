@@ -1,6 +1,11 @@
+# Python
+.venv/
 __pycache__/
-.env
-*.db
-.idea/
-frontend/node_modules/
+*.pyc
+
+# Node
 node_modules/
+
+# IDE
+.idea/
+.vscode/
