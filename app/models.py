@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Date, Float, JSON, DateTime, func, ForeignKey
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 
 from app.db import Base
 
@@ -41,5 +42,8 @@ class Show(Base):
     vote_average = Column(Float, nullable=True)
     vote_count = Column(Integer, nullable=True)
     first_air_date = Column(Date, nullable=True)
+
+    # Vector embedding for semantic search / recommendations (OpenAI text-embedding-3-* is commonly 1536 dims)
+    embedding = Column(Vector(1536), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

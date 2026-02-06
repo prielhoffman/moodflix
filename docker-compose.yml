@@ -1,16 +1,20 @@
 services:
   db:
-    image: postgres:15
+    # Postgres image with pgvector pre-installed
+    image: pgvector/pgvector:pg15
     container_name: moodflix-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      # Provide safe defaults so `docker compose up` works even without a local .env file
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-moodflix}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Auto-enable extensions on first DB init (only runs when the data volume is empty)
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
 
 volumes:
   postgres_data:
