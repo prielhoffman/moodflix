@@ -22,6 +22,7 @@ There is also an optional AI layer: you can generate **local embeddings** for sh
   - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
 - **Recommendations**
   - `POST /recommend` returns **top N (default 10)** shows ranked by existing scoring logic
+  - Optional `query` field enables semantic candidate retrieval before scoring
   - Includes short **explanations** (“why this was recommended”)
 - **Watchlist (per user)**
   - `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required)
@@ -30,6 +31,9 @@ There is also an optional AI layer: you can generate **local embeddings** for sh
 - **TMDB enrichment (optional, best‑effort)**
   - Posters/ratings/overviews/dates are fetched from TMDB when `TMDB_API_KEY` is set
   - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields become `null`)
+- **Semantic search**
+  - `POST /search/semantic` performs pgvector cosine search over embeddings
+  - `POST /search/more-like-this` returns similar shows by `show_id`
 - **Embeddings generation (batch script)**
   - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
 - **Graceful handling of missing API keys**

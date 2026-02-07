@@ -64,6 +64,11 @@ class RecommendationInput(BaseModel):
         description="Context in which the show will be watched",
     )
 
+    query: Optional[str] = Field(
+        None,
+        description="Optional natural language query for semantic candidate retrieval",
+    )
+
 
 # --------------------------------- OUTPUT ---------------------------------
 class RecommendationOutput(BaseModel):
@@ -191,3 +196,8 @@ class SemanticSearchResult(BaseModel):
     vote_average: Optional[float] = None
     first_air_date: Optional[str] = None
     distance: float = Field(..., description="Cosine distance (lower is more similar)")
+
+
+class MoreLikeThisRequest(BaseModel):
+    show_id: int = Field(..., ge=1, description="Show id to find similar titles for")
+    top_k: int = Field(10, ge=1, le=50, description="Number of results to return (max 50)")

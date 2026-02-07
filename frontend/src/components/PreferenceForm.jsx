@@ -10,6 +10,7 @@ function PreferenceForm({ onSubmit }) {
     age: "",
     mood: "chill",
     binge_preference: "binge",
+    query: "",
   });
 
   // Handle changes for all inputs
@@ -32,6 +33,13 @@ function PreferenceForm({ onSubmit }) {
       ...formData,
       age: Number(formData.age),
     };
+
+    const trimmedQuery = preparedData.query?.trim();
+    if (!trimmedQuery) {
+      delete preparedData.query;
+    } else {
+      preparedData.query = trimmedQuery;
+    }
 
     // Send data to parent (App.jsx)
     onSubmit(preparedData);
@@ -103,6 +111,19 @@ function PreferenceForm({ onSubmit }) {
             Short series
           </label>
         </div>
+      </div>
+
+      {/* Optional semantic query */}
+      <div className="form-group">
+        <label htmlFor="query">Search (optional)</label>
+        <input
+          type="text"
+          id="query"
+          name="query"
+          placeholder="e.g., funny workplace comedy"
+          value={formData.query}
+          onChange={handleChange}
+        />
       </div>
 
       {/* Submit button */}

@@ -1,7 +1,5 @@
 from datetime import date
 import logging
-import json
-import time as _time
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
-from app.schemas import SemanticSearchRequest, SemanticSearchResult
+from app.schemas import SemanticSearchRequest, SemanticSearchResult, MoreLikeThisRequest
 
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -34,23 +32,6 @@ _TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
     10768: "war",
     37: "western",
 }
-
-
-def _debug_log(message: str, data: dict, *, hypothesis_id: str, run_id: str = "pre-fix") -> None:
-    try:
-        payload = {
-            "id": f"log_{int(_time.time() * 1000)}_{hypothesis_id}",
-            "timestamp": int(_time.time() * 1000),
-            "location": "app/routers/search.py",
-            "message": message,
-            "data": data,
-            "runId": run_id,
-            "hypothesisId": hypothesis_id,
-        }
-        with open(r"c:\Users\Owner\Desktop\Github-Projects\MoodFlix\.cursor\debug.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload) + "\n")
-    except Exception:
-        pass
 
 
 def _short_overview(text: str | None) -> str:
@@ -83,14 +64,6 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
     Semantic search over shows using pgvector cosine distance.
     Lower distance = more similar.
     """
-    # region agent log
-    _debug_log(
-        "semantic_search_entry",
-        {"query_raw": payload.query, "top_k": payload.top_k},
-        hypothesis_id="H1",
-    )
-    # endregion agent log
-
     query = payload.query.strip()
     if not query:
         raise HTTPException(status_code=400, detail="query cannot be empty")
@@ -108,13 +81,6 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
     distance_expr = Show.embedding.cosine_distance(query_vec).label("distance")
 
     try:
-        # region agent log
-        _debug_log(
-            "semantic_search_db_query_start",
-            {"top_k": top_k},
-            hypothesis_id="H2",
-        )
-        # endregion agent log
         rows = (
             db.query(Show, distance_expr)
             .filter(Show.embedding.isnot(None))
@@ -122,21 +88,7 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
             .limit(top_k)
             .all()
         )
-        # region agent log
-        _debug_log(
-            "semantic_search_db_query_done",
-            {"rows_count": len(rows)},
-            hypothesis_id="H2",
-        )
-        # endregion agent log
     except Exception as e:
-        # region agent log
-        _debug_log(
-            "semantic_search_db_query_error",
-            {"error": str(e)},
-            hypothesis_id="H2",
-        )
-        # endregion agent log
         logger.exception("Semantic search DB query failed")
         raise HTTPException(status_code=500, detail=f"Semantic search DB query failed: {e}") from e
 
@@ -144,13 +96,6 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
     for show, distance in rows:
         first_air_date = show.first_air_date.isoformat() if isinstance(show.first_air_date, date) else None
         genres = normalize_genres(show.genres)
-        # region agent log
-        _debug_log(
-            "semantic_search_row_genres",
-            {"show_id": getattr(show, "id", None), "genres_type": type(genres).__name__, "genres_value": genres},
-            hypothesis_id="H3",
-        )
-        # endregion agent log
 
         results.append(
             SemanticSearchResult(
@@ -166,6 +111,46 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
         )
 
     # Defensive sort (DB should already order, but helps with mocks/tests).
+    results.sort(key=lambda r: r.distance)
+    return results
+
+
+@router.post("/more-like-this", response_model=List[SemanticSearchResult])
+def more_like_this(payload: MoreLikeThisRequest, db: Session = Depends(get_db)):
+    show = db.query(Show).filter(Show.id == payload.show_id).first()
+    if show is None:
+        raise HTTPException(status_code=404, detail="Show not found")
+    if show.embedding is None:
+        raise HTTPException(status_code=400, detail="Show does not have an embedding")
+
+    top_k = min(int(payload.top_k or 10), 50)
+    distance_expr = Show.embedding.cosine_distance(show.embedding).label("distance")
+
+    rows = (
+        db.query(Show, distance_expr)
+        .filter(Show.embedding.isnot(None))
+        .filter(Show.id != show.id)
+        .order_by(distance_expr.asc())
+        .limit(top_k)
+        .all()
+    )
+
+    results: list[SemanticSearchResult] = []
+    for row, distance in rows:
+        first_air_date = row.first_air_date.isoformat() if isinstance(row.first_air_date, date) else None
+        results.append(
+            SemanticSearchResult(
+                id=row.id,
+                title=row.title,
+                genres=normalize_genres(row.genres),
+                overview=_short_overview(row.overview),
+                poster_url=row.poster_url,
+                vote_average=row.vote_average,
+                first_air_date=first_air_date,
+                distance=float(distance) if distance is not None else float("inf"),
+            )
+        )
+
     results.sort(key=lambda r: r.distance)
     return results
 

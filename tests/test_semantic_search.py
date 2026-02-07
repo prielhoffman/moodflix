@@ -79,3 +79,40 @@ def test_semantic_search_empty_embeddings_returns_empty_list(monkeypatch):
 
     app.dependency_overrides.clear()
 
+
+def test_more_like_this_excludes_original_and_sorts(monkeypatch):
+    base_show = FakeShow(id=10, title="Base", genres=[35], overview="base", first_air_date=date(2020, 1, 1))
+    base_show.embedding = [0.0] * 384
+
+    rows = [
+        (FakeShow(id=11, title="A", genres=[35, 18], overview="aaa"), 0.2),
+        (FakeShow(id=12, title="B", genres=["crime"], overview="bbb"), 0.5),
+    ]
+
+    class FakeQueryWithFirst(_FakeQuery):
+        def __init__(self, rows, first_value=None):
+            super().__init__(rows)
+            self._first_value = first_value
+
+        def first(self):
+            return self._first_value
+
+    class FakeDBWithFirst(FakeDB):
+        def query(self, *args, **_kwargs):
+            if len(args) == 1:
+                return FakeQueryWithFirst([], first_value=base_show)
+            return FakeQueryWithFirst(rows)
+
+    app.dependency_overrides[get_db] = lambda: (yield FakeDBWithFirst(rows))
+
+    client = TestClient(app)
+    res = client.post("/search/more-like-this", json={"show_id": 10, "top_k": 10})
+    assert res.status_code == 200
+
+    data = res.json()
+    assert [item["id"] for item in data] == [11, 12]
+    assert [item["distance"] for item in data] == sorted([0.2, 0.5])
+    assert data[0]["genres"] == ["comedy", "drama"]
+
+    app.dependency_overrides.clear()
+

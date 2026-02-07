@@ -342,3 +342,40 @@ def test_tmdb_enrichment_does_not_affect_existing_filters(monkeypatch):
 
     # Existing safety rule: no TV-MA in family context
     assert all(show.content_rating != "TV-MA" for show in results)
+
+
+def test_recommend_with_query_uses_db_candidates(monkeypatch):
+    class DummyShow:
+        def __init__(self, title, genres=None, overview=None):
+            self.title = title
+            self.genres = genres or []
+            self.overview = overview or ""
+            self.poster_url = None
+            self.vote_average = None
+            self.first_air_date = None
+
+    # Ensure no model download during test
+    monkeypatch.setattr("app.logic.embed_text", lambda _q: [0.0] * 384)
+
+    candidates = [
+        DummyShow("Alpha", genres=[35, 18], overview="alpha overview"),
+        DummyShow("Beta", genres=["crime"], overview="beta overview"),
+    ]
+
+    monkeypatch.setattr("app.logic._fetch_candidate_rows", lambda _db, _vec, _k: candidates)
+
+    user_input = RecommendationInput(
+        age=30,
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=["comedy"],
+        mood=Mood.HAPPY,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.ALONE,
+        query="funny workplace comedy",
+    )
+
+    results = recommend_shows(user_input, db=object())
+
+    assert results
+    assert {show.title for show in results} == {"Alpha", "Beta"}

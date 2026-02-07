@@ -13,6 +13,7 @@ from app.schemas import (
 )
 from app.data import get_all_shows
 from app.tmdb import search_tv_show
+from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from sqlalchemy.orm import Session
 
@@ -83,34 +84,49 @@ def _build_short_summary(overview: str | None) -> str:
     return "No summary available."
 
 
+def _convert_show_row(row: Show) -> dict:
+    genres = _coerce_genres(row.genres)
+
+    return {
+        "title": row.title,
+        "recommendation_reason": None,
+        "genres": genres,
+        "short_summary": _build_short_summary(row.overview),
+        # These fields don't exist in the current DB schema yet;
+        # keep them as None so filters can treat them as "unknown".
+        "content_rating": None,
+        "average_episode_length": None,
+        "number_of_seasons": None,
+        "language": None,
+        # Optional fields we can use as a fallback when TMDB enrichment is unavailable.
+        "poster_url": row.poster_url,
+        "tmdb_rating": row.vote_average,
+        "tmdb_overview": row.overview,
+        "first_air_date": row.first_air_date,
+    }
+
+
+def _load_shows_from_rows(rows: list[Show]) -> list[dict]:
+    return [_convert_show_row(row) for row in rows]
+
+
 def _load_shows_from_db(db: Session) -> list[dict]:
     rows = db.query(Show).all()
+    return _load_shows_from_rows(rows)
 
-    shows: list[dict] = []
-    for row in rows:
-        genres = _coerce_genres(row.genres)
 
-        shows.append(
-            {
-                "title": row.title,
-                "recommendation_reason": None,
-                "genres": genres,
-                "short_summary": _build_short_summary(row.overview),
-                # These fields don't exist in the current DB schema yet;
-                # keep them as None so filters can treat them as "unknown".
-                "content_rating": None,
-                "average_episode_length": None,
-                "number_of_seasons": None,
-                "language": None,
-                # Optional fields we can use as a fallback when TMDB enrichment is unavailable.
-                "poster_url": row.poster_url,
-                "tmdb_rating": row.vote_average,
-                "tmdb_overview": row.overview,
-                "first_air_date": row.first_air_date,
-            }
-        )
+def _fetch_candidate_rows(db: Session, query_vec: list[float], top_k: int) -> list[Show]:
+    if len(query_vec) != EMBED_DIM:
+        return []
 
-    return shows
+    distance_expr = Show.embedding.cosine_distance(query_vec)
+    return (
+        db.query(Show)
+        .filter(Show.embedding.isnot(None))
+        .order_by(distance_expr.asc())
+        .limit(top_k)
+        .all()
+    )
 
 
 def _build_recommendation_reason(
@@ -180,6 +196,7 @@ def recommend_shows(
     *,
     db: Optional[Session] = None,
     top_n: int = 10,
+    candidate_top_k: int = 80,
 ) -> List[RecommendationOutput]:
     """
     Recommend shows based on user input.
@@ -188,16 +205,23 @@ def recommend_shows(
     1) Postgres `shows` table (if db provided and has rows)
     2) Static dataset in app/data.py (fallback for empty DB or DB errors)
     """
+    shows: list[dict] = []
 
-    shows: list[dict]
-    if db is not None:
+    query_text = user_input.query.strip() if user_input.query else ""
+    if query_text and db is not None:
         try:
-            shows = _load_shows_from_db(db)
+            query_vec = embed_text(query_text)
+            candidate_rows = _fetch_candidate_rows(db, query_vec, candidate_top_k)
+            shows = _load_shows_from_rows(candidate_rows)
         except Exception:
-            # Best-effort fallback: recommendations should still work even if DB is down.
             shows = []
     else:
-        shows = []
+        if db is not None:
+            try:
+                shows = _load_shows_from_db(db)
+            except Exception:
+                # Best-effort fallback: recommendations should still work even if DB is down.
+                shows = []
 
     if not shows:
         shows = get_all_shows()
