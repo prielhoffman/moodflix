@@ -1,288 +1,212 @@
-# 🎬 MoodFlix
+# 📺 MoodFlix
 
-MoodFlix is a backend-first web application that recommends TV shows based on the user’s **mood**, **watching preferences**, and **context**.
+MoodFlix is a full‑stack project that recommends **TV shows** based on a user’s **mood** and **watching preferences**. It also supports **accounts + per‑user watchlists**, and can optionally enrich recommendations with **TMDB metadata**.
 
-The project is designed with clean architecture principles, focusing on separation of concerns, testability, and future extensibility toward a full Netflix-like experience.
-
-The project was developed with the assistance of AI tools (ChatGPT) for architecture design, testing strategy, and code review.
+There is also an optional AI layer: you can generate **OpenAI embeddings** for shows and store them in **pgvector** (to enable semantic search and vector ranking later).
 
 ---
 
-## ✨ Key Features
+## 🖥️ Tech Stack
 
-- Mood-based TV show recommendations
-- Preference-aware filtering:
-  - Age & family safety
-  - Binge vs short series
-  - Episode length
-  - Language
-- Explainable recommendations (why a show was suggested)
-- TMDB integration for posters and metadata
-- Graceful handling of external API failures
-- Fully tested recommendation logic
-- React-based frontend interface
+- **Backend**: FastAPI, SQLAlchemy, Alembic
+- **Database**: PostgreSQL (Docker) + pgvector
+- **Frontend**: React + Vite
+- **Auth**: JWT (Bearer tokens)
+- **AI**: OpenAI embeddings + pgvector storage
 
 ---
 
-## 🧠 Recommendation Logic
+## ✨ Current Features (Implemented)
 
-Recommendations are generated using a multi-stage pipeline:
-
-1. **Hard filters**
-   - Age restrictions
-   - Family-safe content
-   - Binge / short-series preference
-   - Episode length
-   - Language
-
-2. **Soft matching**
-   - Preferred genres
-   - Mood → genre affinity mapping
-   - Mood affects ranking, not filtering
-
-3. **Explainability**
-   - Each recommendation may include a short human-readable reason explaining the match
-
-4. **External enrichment**
-   - Posters, ratings, and summaries are fetched from TMDB
-   - Failures do not break recommendations
+- **User authentication**
+  - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- **Recommendations**
+  - `POST /recommend` returns **top N (default 10)** shows ranked by existing scoring logic
+  - Includes short **explanations** (“why this was recommended”)
+- **Watchlist (per user)**
+  - `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required)
+- **DB‑backed shows**
+  - Recommendations prefer the `shows` table in Postgres (fallback to `app/data.py` if DB is empty)
+- **TMDB enrichment (optional, best‑effort)**
+  - Posters/ratings/overviews/dates are fetched from TMDB when `TMDB_API_KEY` is set
+  - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields become `null`)
+- **Embeddings generation (batch script)**
+  - `scripts/generate_embeddings.py` generates OpenAI embeddings and stores them in `shows.embedding` (`vector(1536)`)
+- **Graceful handling of missing API keys**
+  - Server starts without `TMDB_API_KEY`
+  - Embeddings script exits with a clear message without `OPENAI_API_KEY`
 
 ---
 
-## 🌐 TMDB Integration
-
-MoodFlix uses **The Movie Database (TMDB)** API to enrich recommendations with:
-
-- Poster images
-- Ratings
-- Overviews
-- First air date
-
-TMDB is treated as an **external enrichment layer**, isolated from business logic.
-
-If TMDB is unavailable or returns incomplete data, recommendations still work correctly.
-
----
-
-## 🧪 Testing Strategy
-
-The project includes comprehensive tests using `pytest`:
-
-### Recommendation Logic Tests
-- Safety rules (age, family context)
-- Binge and episode length preferences
-- Genre matching
-- Mood-based ranking
-- Recommendation reason generation
-
-### TMDB Integration Tests
-- TMDB returning no results
-- Missing poster data
-- Valid metadata mapping
-- Network/API failures
-- Ensuring enrichment does not affect core logic
-
-All external API calls are mocked — no real network access during tests.
-
----
-
-## 🗂 Project Structure
+## 📁 Project Structure (High Level)
 
 ```
-app/
-  api.py        # FastAPI routes
-  logic.py      # Recommendation engine
-  data.py       # Show dataset (temporary, will be replaced by DB)
-  schemas.py    # Pydantic models
-  tmdb.py       # TMDB external API adapter
+app/                  # FastAPI app, routers, business logic
+  api.py              # FastAPI app + routes
+  logic.py            # Recommendation engine (DB-backed + fallback)
+  models.py           # SQLAlchemy models (User, WatchlistItem, Show)
+  schemas.py          # Pydantic schemas (API contracts)
+  tmdb.py             # TMDB enrichment adapter (optional / best-effort)
 
-frontend/
-  public/
-  src/
-    api/         # API communication
-    assets/      # Images and static files
-    components/  # React components
-    App.jsx
-    App.css
-    main.jsx
-    index.css
-
-tests/
-  test_logic.py # Recommendation logic tests
-  test_tmdb.py  # TMDB integration tests
+alembic/              # DB migrations
+scripts/              # One-off utilities (ingest, embeddings generation)
+frontend/             # React + Vite UI
+tests/                # pytest suite
+docker/               # Docker init scripts (pgvector extension)
 ```
 
 ---
 
-## 💻 Frontend
-
-The frontend is built with **React (Vite)** and provides:
-
-- User preference form
-- Recommendation results view
-- Netflix-style layout foundation
-- API integration with FastAPI backend
-
-Future UI enhancements will include carousels and personalization features.
-
----
-
-## 🤖 AI-Assisted Development
-
-This project was developed with the assistance of AI tools (ChatGPT) for:
-
-- System design and architecture planning
-- Writing and refining tests
-- Code review and refactoring
-- Debugging and troubleshooting
-- Documentation support
-
-All architectural and technical decisions were reviewed and validated by the developer.
-
----
-
-## 🚀 Getting Started
+## 💻 Setup Instructions
 
 ### Prerequisites
 
-- **Python 3.12.x** (recommended for compatibility with SQLAlchemy)
-  - ⚠️ **Note:** Python 3.13 is not currently supported due to compatibility issues with SQLAlchemy 2.0.25
-  - See [Windows Setup Guide](docs/setup.md) for detailed installation instructions
-- Node.js 16+ and npm
-- TMDB API key ([Get one here](https://www.themoviedb.org/settings/api))
+- **Python 3.12.x** (recommended)
+- Node.js (for the frontend)
+- Docker Desktop (for Postgres + pgvector)
 
-### Installation
+### 1) Start Postgres (with pgvector)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd MoodFlix
-   ```
-
-2. **Create a virtual environment** (recommended)
-   
-   **Windows PowerShell:**
-   ```powershell
-   python3.12 -m venv venv
-   .\venv\Scripts\Activate.ps1
-   ```
-   
-   **Windows Git Bash:**
-   ```bash
-   python3.12 -m venv venv
-   source venv/Scripts/activate
-   ```
-   
-   **macOS/Linux:**
-   ```bash
-   python3.12 -m venv venv
-   source venv/bin/activate
-   ```
-
-3. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Install frontend dependencies**
-   ```bash
-   cd frontend
-   npm install
-   cd ..
-   ```
-
-### Environment Configuration
-
-1. **Copy the example environment file**
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Edit `.env` and add your TMDB API key**
-   ```env
-   TMDB_API_KEY=your_actual_tmdb_api_key_here
-   ```
-
-   Optionally, configure the frontend API URL (defaults to `http://127.0.0.1:8000`):
-   ```env
-   VITE_API_BASE_URL=http://127.0.0.1:8000
-   ```
-
-   **Note:** The `.env` file is already in `.gitignore` and will not be committed to version control.
-
-### Running the Application
-
-#### Backend (FastAPI)
-
-Start the backend server:
+From the repo root:
 
 ```bash
+docker compose up -d db
+```
+
+### 2) Backend setup & run
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
 uvicorn app.api:app --reload
 ```
 
-The API will be available at:
-- API: http://127.0.0.1:8000
-- Swagger UI: http://127.0.0.1:8000/docs
-- ReDoc: http://127.0.0.1:8000/redoc
+Backend URLs:
+- API: `http://127.0.0.1:8000`
+- Swagger: `http://127.0.0.1:8000/docs`
 
-#### Frontend (React/Vite)
-
-In a separate terminal, start the frontend development server:
+### 3) Frontend setup & run
 
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-The frontend will be available at http://localhost:5173
+Frontend URL:
+- `http://localhost:5173`
 
-### Running Tests
+---
 
-Run all tests:
+## 📺 Environment Variables
+
+Create your own `.env` locally (this repo does **not** ship an `.env.example`).
+
+### Database (used by backend + Alembic)
+
+The backend builds its DB connection from `POSTGRES_*` variables:
+
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=moodflix
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+```
+
+> Note: A single `DATABASE_URL` is not used by the current backend code. (It may be added later as an alternative.)
+
+### Auth / JWT
+
+```env
+SECRET_KEY=change-me
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+### TMDB (optional)
+
+```env
+TMDB_API_KEY=your_tmdb_key
+```
+
+If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`).
+
+### OpenAI (optional, used by embeddings script only)
+
+```env
+OPENAI_API_KEY=your_openai_key
+```
+
+### Frontend (optional)
+
+```env
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+---
+
+## 🤖 AI / Embeddings (pgvector)
+
+Embeddings are generated via a **batch script** (not an API endpoint yet). They are stored in:
+- `shows.embedding` as `vector(1536)` (pgvector)
+
+The script:
+- builds input text: `Title / Genres / Overview`
+- batches requests (default batch size 100)
+- retries transient errors (429/5xx/timeouts) with exponential backoff
+- commits after each batch
+
+### Generate embeddings
+
+```powershell
+# Make sure DB env vars are set (POSTGRES_*) and Docker DB is running
+$env:OPENAI_API_KEY="..."
+
+.\.venv\Scripts\python scripts\generate_embeddings.py --batch-size 100
+
+# Optional flags:
+#   --limit 200
+#   --force
+#   --batch-size 50
+```
+
+---
+
+## 📺 Roadmap / Planned Features
+
+- **Semantic search** over shows using embeddings
+- **Vector ranking** (pgvector similarity search) combined with existing scoring
+- **Personalization** via watch history and explicit feedback (“helped / didn’t help”)
+- **Production hardening**
+  - config cleanup, logging, safer secrets handling, better error reporting
+- **CI/CD**
+  - automated tests, linting, and container builds
+- **UI improvements**
+  - more polished browsing experience, better auth UX, richer show details
+
+---
+
+## 📺 Developer Notes
+
+### Test `/recommend`
+
+- Use Swagger at `http://127.0.0.1:8000/docs`, or:
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend ^
+  -H "Content-Type: application/json" ^
+  -d "{\"age\":25,\"mood\":\"chill\",\"binge_preference\":\"binge\"}"
+```
+
+### Run tests
 
 ```bash
 pytest
 ```
 
-Run tests with verbose output:
+### Swagger docs
 
-```bash
-pytest -v
-```
-
-Run specific test files:
-
-```bash
-pytest tests/test_logic.py
-pytest tests/test_tmdb.py
-```
-
----
-
-## 🚀 Roadmap
-
-- Frontend UI with Netflix-style poster cards
-- Carousel-based browsing
-- User accounts & watch history
-- Personalization based on past selections
-- Database integration
-- Recommendation feedback loop (“this helped / didn’t help”)
-
----
-
-## 📝 Notes
-
-- Current show data is temporary and used for logic validation
-- Future versions will replace static data with a database
-- The project prioritizes correctness, clarity, and extensibility over premature optimization
-
----
-
-## 💡 Why this project?
-
-MoodFlix is built as a learning and portfolio project to demonstrate:
-
-- Clean backend architecture
-- Real-world API integration
-- Thoughtful testing
-- Product-oriented decision making
+- `http://127.0.0.1:8000/docs` shows request/response shapes for all endpoints and supports trying requests interactively.
