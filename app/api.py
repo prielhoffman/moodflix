@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.models import Show
 from app.db import get_db
 from app.routers import auth, watchlist
+from app.routers import search
 from app.schemas import RecommendationInput, RecommendationOutput
 from app.logic import recommend_shows
 
@@ -15,6 +16,7 @@ app = FastAPI(title="MoodFlix")
 
 app.include_router(auth.router)
 app.include_router(watchlist.router)
+app.include_router(search.router)
 
 # Enable CORS for frontend
 app.add_middleware(

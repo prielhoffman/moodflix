@@ -2,7 +2,7 @@
 
 MoodFlix is a full‑stack project that recommends **TV shows** based on a user’s **mood** and **watching preferences**. It also supports **accounts + per‑user watchlists**, and can optionally enrich recommendations with **TMDB metadata**.
 
-There is also an optional AI layer: you can generate **OpenAI embeddings** for shows and store them in **pgvector** (to enable semantic search and vector ranking later).
+There is also an optional AI layer: you can generate **local embeddings** for shows and store them in **pgvector** (to enable semantic search and vector ranking later).
 
 ---
 
@@ -12,7 +12,7 @@ There is also an optional AI layer: you can generate **OpenAI embeddings** for s
 - **Database**: PostgreSQL (Docker) + pgvector
 - **Frontend**: React + Vite
 - **Auth**: JWT (Bearer tokens)
-- **AI**: OpenAI embeddings + pgvector storage
+- **AI**: Local embeddings (sentence-transformers) + pgvector storage
 
 ---
 
@@ -31,10 +31,9 @@ There is also an optional AI layer: you can generate **OpenAI embeddings** for s
   - Posters/ratings/overviews/dates are fetched from TMDB when `TMDB_API_KEY` is set
   - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields become `null`)
 - **Embeddings generation (batch script)**
-  - `scripts/generate_embeddings.py` generates OpenAI embeddings and stores them in `shows.embedding` (`vector(1536)`)
+  - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
 - **Graceful handling of missing API keys**
   - Server starts without `TMDB_API_KEY`
-  - Embeddings script exits with a clear message without `OPENAI_API_KEY`
 
 ---
 
@@ -100,7 +99,7 @@ Frontend URL:
 
 ---
 
-## 📺 Environment Variables
+## 🔎 Environment Variables
 
 Create your own `.env` locally (this repo does **not** ship an `.env.example`).
 
@@ -134,11 +133,9 @@ TMDB_API_KEY=your_tmdb_key
 
 If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`).
 
-### OpenAI (optional, used by embeddings script only)
+### Embeddings (local, no API keys)
 
-```env
-OPENAI_API_KEY=your_openai_key
-```
+Embeddings are generated locally via `sentence-transformers` — no API key required.
 
 ### Frontend (optional)
 
@@ -151,20 +148,17 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 ## 🤖 AI / Embeddings (pgvector)
 
 Embeddings are generated via a **batch script** (not an API endpoint yet). They are stored in:
-- `shows.embedding` as `vector(1536)` (pgvector)
+- `shows.embedding` as `vector(384)` (pgvector)
 
 The script:
 - builds input text: `Title / Genres / Overview`
 - batches requests (default batch size 100)
-- retries transient errors (429/5xx/timeouts) with exponential backoff
+- runs locally (no paid APIs)
 - commits after each batch
 
 ### Generate embeddings
 
 ```powershell
-# Make sure DB env vars are set (POSTGRES_*) and Docker DB is running
-$env:OPENAI_API_KEY="..."
-
 .\.venv\Scripts\python scripts\generate_embeddings.py --batch-size 100
 
 # Optional flags:
@@ -175,7 +169,7 @@ $env:OPENAI_API_KEY="..."
 
 ---
 
-## 📺 Roadmap / Planned Features
+## 🗺️ Roadmap / Planned Features
 
 - **Semantic search** over shows using embeddings
 - **Vector ranking** (pgvector similarity search) combined with existing scoring
@@ -189,7 +183,7 @@ $env:OPENAI_API_KEY="..."
 
 ---
 
-## 📺 Developer Notes
+## 📋 Developer Notes
 
 ### Test `/recommend`
 

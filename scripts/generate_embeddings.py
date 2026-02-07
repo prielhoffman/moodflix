@@ -1,11 +1,7 @@
 import argparse
-import os
 import sys
-import time
 from pathlib import Path
 from typing import Any
-
-from openai import OpenAI
 
 # Allow running this script directly: `python scripts/generate_embeddings.py`
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -13,12 +9,11 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app.db import SessionLocal
+from app.embeddings import EMBED_DIM, embed_texts
 from app.models import Show
 
 
-# OpenAI embedding model with 1536 dimensions (matches Vector(1536))
-EMBEDDING_MODEL = "text-embedding-3-small"
-EXPECTED_DIM = 1536
+EXPECTED_DIM = EMBED_DIM
 
 
 _TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
@@ -74,103 +69,20 @@ def build_embedding_text(show: Show) -> str:
     return "\n".join(lines)
 
 
-def create_embeddings_with_retries(
-    client: OpenAI,
-    *,
-    inputs: list[str],
-    max_retries: int = 6,
-    base_delay_s: float = 1.0,
-) -> list[list[float]]:
-    """
-    Create embeddings with basic backoff on rate limits / transient failures.
-    Keeps dependencies minimal (no tenacity).
-    """
-    last_err: Exception | None = None
-
-    for attempt in range(max_retries):
-        try:
-            resp = client.embeddings.create(model=EMBEDDING_MODEL, input=inputs)
-            vectors = [item.embedding for item in resp.data]
-            return vectors
-        except Exception as e:
-            last_err = e
-
-            # Best-effort parsing of status codes across OpenAI SDK versions
-            status = (
-                getattr(e, "status_code", None)
-                or getattr(e, "status", None)
-                or getattr(getattr(e, "response", None), "status_code", None)
-            )
-
-            # Fail fast on obvious non-retryable HTTP errors
-            if status in (400, 401, 403, 404, 409, 422):
-                hint = ""
-                if status in (401, 403):
-                    hint = " Check OPENAI_API_KEY / permissions."
-                elif status == 400:
-                    hint = " Check model name and request payload."
-                raise RuntimeError(f"OpenAI request failed (status={status}).{hint}") from e
-
-            # Retry only on transient cases: rate limits, 5xx, and network/timeouts.
-            cls_name = e.__class__.__name__.lower()
-            msg = str(e).lower()
-            network_like = any(
-                k in cls_name
-                for k in (
-                    "timeout",
-                    "connect",
-                    "connection",
-                    "api_connection",
-                    "httpx",
-                    "httpcore",
-                )
-            ) or any(
-                k in msg
-                for k in (
-                    "timeout",
-                    "timed out",
-                    "connection",
-                    "network",
-                    "temporarily unavailable",
-                    "server disconnected",
-                )
-            )
-
-            retryable = status in (429, 500, 502, 503, 504) or (status is None and network_like)
-            if not retryable:
-                raise RuntimeError(f"OpenAI request failed (status={status}).") from e
-
-            if attempt == max_retries - 1:
-                break
-
-            sleep_s = base_delay_s * (2 ** attempt)
-            print(f"⚠️ OpenAI request failed (status={status}). retrying in {sleep_s:.1f}s... ({attempt+1}/{max_retries})")
-            time.sleep(sleep_s)
-
-    raise RuntimeError(f"OpenAI embeddings request failed after retries: {last_err}") from last_err
-
-
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate and store embeddings for shows in Postgres.")
     p.add_argument("--limit", type=int, default=None, help="Optional limit on number of shows to process")
     p.add_argument("--force", action="store_true", help="Regenerate embeddings even if already present")
-    p.add_argument("--batch-size", type=int, default=100, help="Batch size for OpenAI embedding requests")
+    p.add_argument("--batch-size", type=int, default=100, help="Batch size for embedding generation")
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("OPENAI_API_KEY is missing. Set it in your environment to generate embeddings.")
-        return 1
-
     batch_size = max(1, int(args.batch_size))
     limit = int(args.limit) if args.limit is not None else None
     force = bool(args.force)
-
-    client = OpenAI(api_key=api_key)
 
     db = SessionLocal()
     try:
@@ -204,10 +116,10 @@ def main() -> int:
                 break
 
             texts = [build_embedding_text(s) for s in rows]
-            vectors = create_embeddings_with_retries(client, inputs=texts)
+            vectors = embed_texts(texts)
 
             if len(vectors) != len(rows):
-                raise RuntimeError("OpenAI returned a different number of embeddings than inputs")
+                raise RuntimeError("Embedding generator returned a different number of vectors than inputs")
 
             for show, vec in zip(rows, vectors):
                 if len(vec) != EXPECTED_DIM:
@@ -217,9 +129,6 @@ def main() -> int:
             db.commit()
             processed += len(rows)
             print(f"✅ Embedded {processed}/{total}")
-
-            # Small pacing delay to be polite with rate limits
-            time.sleep(0.2)
 
         return 0
     finally:

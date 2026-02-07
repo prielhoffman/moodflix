@@ -173,3 +173,21 @@ class Token(BaseModel):
 # ----------------------------------------------------
 class WatchlistTitle(BaseModel):
     title: str
+
+# --------------------------------- SEMANTIC SEARCH ---------------------------------
+
+
+class SemanticSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="Natural language search query")
+    top_k: int = Field(10, ge=1, le=50, description="Number of results to return (max 50)")
+
+
+class SemanticSearchResult(BaseModel):
+    id: int
+    title: str
+    genres: List[str] = Field(default_factory=list)
+    overview: str
+    poster_url: Optional[str] = None
+    vote_average: Optional[float] = None
+    first_air_date: Optional[str] = None
+    distance: float = Field(..., description="Cosine distance (lower is more similar)")

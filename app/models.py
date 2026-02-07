@@ -43,7 +43,7 @@ class Show(Base):
     vote_count = Column(Integer, nullable=True)
     first_air_date = Column(Date, nullable=True)
 
-    # Vector embedding for semantic search / recommendations (OpenAI text-embedding-3-* is commonly 1536 dims)
-    embedding = Column(Vector(1536), nullable=True)
+    # Vector embedding for semantic search / recommendations (MiniLM 384 dims)
+    embedding = Column(Vector(384), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
