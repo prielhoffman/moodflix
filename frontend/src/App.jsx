@@ -11,6 +11,7 @@ import {
   addToWatchlist,
   removeFromWatchlist,
   fetchWatchlist,
+  hasAccessToken,
 } from "./api/moodflixApi";
 
 function App() {
@@ -68,11 +69,31 @@ function App() {
     return watchlist.some((item) => item?.title === title);
   }
 
+  function handleWatchlistError(err) {
+    const msg = String(err?.message || "");
+
+    if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
+      setError("Please log in to save to watchlist.");
+      window.alert("Please log in to save to watchlist.");
+      return;
+    }
+
+    setError("Could not update watchlist. Please try again.");
+    window.alert("Could not update watchlist. Please try again.");
+  }
+
   async function toggleSave(show) {
     const title = show?.title;
 
     if (!title) return;
     if (savingTitle) return;
+
+    // Watchlist endpoints require JWT.
+    if (!hasAccessToken()) {
+      setError("Please log in to save to watchlist.");
+      window.alert("Please log in to save to watchlist.");
+      return;
+    }
 
     setSavingTitle(title);
 
@@ -84,6 +105,7 @@ function App() {
       setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
     } catch (err) {
       console.error(err);
+      handleWatchlistError(err);
     } finally {
       setSavingTitle(null);
     }

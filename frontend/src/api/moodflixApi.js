@@ -35,6 +35,10 @@ function getAccessToken() {
   }
 }
 
+export function hasAccessToken() {
+  return Boolean(getAccessToken());
+}
+
 function setAccessToken(token) {
   try {
     localStorage.setItem(ACCESS_TOKEN_KEY, token);
