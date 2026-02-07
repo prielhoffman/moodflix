@@ -4,15 +4,10 @@ load_dotenv()
 import os
 import requests
 
-# Read API key from environment variables
-# This avoids hardcoding secrets in the codebase
+
+# Read API key from environment variables.
+# IMPORTANT: TMDB is an optional enrichment layer — the app should run without it.
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
-
-# Fail fast if the API key is missing
-# Prevents silent failures later during API calls
-if not TMDB_API_KEY:
-    raise RuntimeError("TMDB_API_KEY is not set in environment variables")
-
 
 # Base URLs for TMDB API and images
 BASE_URL = "https://api.themoviedb.org/3"
@@ -20,6 +15,12 @@ IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 
 
 def search_tv_show(title: str) -> dict | None:
+    # Best-effort enrichment:
+    # - If TMDB is not configured, return None (do not crash the app).
+    # - If TMDB is down / rate-limited, return None.
+    if not TMDB_API_KEY:
+        return None
+
     try:
         url = f"{BASE_URL}/search/tv"
 
@@ -30,10 +31,22 @@ def search_tv_show(title: str) -> dict | None:
             "page": 1,
         }
 
-        response = requests.get(url, params=params, timeout=10)
+        # Keep timeouts low so recommendations don't hang when TMDB is slow.
+        # (connect timeout, read timeout)
+        response = requests.get(url, params=params, timeout=(2, 5))
+
+        # Rate limited / blocked: treat as optional enrichment
+        if response.status_code == 429:
+            return None
+
         response.raise_for_status()
 
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError:
+            # Invalid / non-JSON response from TMDB (or intermediary)
+            return None
+
         results = data.get("results", [])
 
         if not results:

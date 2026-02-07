@@ -1,4 +1,7 @@
-from typing import List
+from __future__ import annotations
+
+from datetime import date
+from typing import Any, List, Optional
 
 from app.schemas import (
     RecommendationInput,
@@ -10,6 +13,8 @@ from app.schemas import (
 )
 from app.data import get_all_shows
 from app.tmdb import search_tv_show
+from app.models import Show
+from sqlalchemy.orm import Session
 
 
 # -------------------- Safety --------------------
@@ -28,11 +33,91 @@ _MOOD_GENRE_MAP = {
 }
 
 
+# TMDB TV genre id → name mapping (used by scripts/ingest_tmdb.py which stores genre_ids for now)
+_TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
+    10759: "action",
+    16: "animation",
+    35: "comedy",
+    80: "crime",
+    99: "documentary",
+    18: "drama",
+    10751: "family",
+    10762: "kids",
+    9648: "mystery",
+    10763: "news",
+    10764: "reality",
+    10765: "sci-fi",
+    10766: "soap",
+    10767: "talk",
+    10768: "war",
+    37: "western",
+}
+
+
+def _coerce_genres(value: Any) -> list[str]:
+    """
+    Normalize genres from DB/static into list[str].
+    - If list[int] (TMDB ids), map to names when possible.
+    - If list[str], lower-case and keep.
+    - Otherwise return empty list.
+    """
+    if not isinstance(value, list):
+        return []
+
+    out: list[str] = []
+    for g in value:
+        if isinstance(g, int):
+            name = _TMDB_TV_GENRE_ID_TO_NAME.get(g)
+            if name:
+                out.append(name)
+        elif isinstance(g, str):
+            if g.strip():
+                out.append(g.strip())
+    return out
+
+
+def _build_short_summary(overview: str | None) -> str:
+    if overview and overview.strip():
+        text = overview.strip()
+        return text if len(text) <= 220 else text[:217].rstrip() + "..."
+    return "No summary available."
+
+
+def _load_shows_from_db(db: Session) -> list[dict]:
+    rows = db.query(Show).all()
+
+    shows: list[dict] = []
+    for row in rows:
+        genres = _coerce_genres(row.genres)
+
+        shows.append(
+            {
+                "title": row.title,
+                "recommendation_reason": None,
+                "genres": genres,
+                "short_summary": _build_short_summary(row.overview),
+                # These fields don't exist in the current DB schema yet;
+                # keep them as None so filters can treat them as "unknown".
+                "content_rating": None,
+                "average_episode_length": None,
+                "number_of_seasons": None,
+                "language": None,
+                # Optional fields we can use as a fallback when TMDB enrichment is unavailable.
+                "poster_url": row.poster_url,
+                "tmdb_rating": row.vote_average,
+                "tmdb_overview": row.overview,
+                "first_air_date": row.first_air_date,
+            }
+        )
+
+    return shows
+
+
 def _build_recommendation_reason(
     *,
     common_genres: set,
     binge_preference: BingePreference,
-    seasons: int,
+    seasons: int | None,
     episode_length: int | None,
     episode_length_pref: EpisodeLengthPreference,
     mood_matched: bool,
@@ -45,10 +130,11 @@ def _build_recommendation_reason(
             f"Matches your interest in {', '.join(sorted(common_genres))}"
         )
 
-    if binge_preference == BingePreference.SHORT_SERIES and seasons <= 3:
-        reasons.append("Easy to finish in one season")
-    elif binge_preference == BingePreference.BINGE and seasons > 3:
-        reasons.append("Great for binge watching")
+    if seasons is not None:
+        if binge_preference == BingePreference.SHORT_SERIES and seasons <= 3:
+            reasons.append("Easy to finish in one season")
+        elif binge_preference == BingePreference.BINGE and seasons > 3:
+            reasons.append("Great for binge watching")
 
     if episode_length is not None:
         if episode_length_pref == EpisodeLengthPreference.SHORT and episode_length <= 30:
@@ -75,9 +161,34 @@ def _build_recommendation_reason(
     return ". ".join(reasons[:2]) if reasons else None
 
 
-def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutput]:
-    shows = get_all_shows()
-    results = []
+def recommend_shows(
+    user_input: RecommendationInput,
+    *,
+    db: Optional[Session] = None,
+    top_n: int = 10,
+) -> List[RecommendationOutput]:
+    """
+    Recommend shows based on user input.
+
+    Data source priority:
+    1) Postgres `shows` table (if db provided and has rows)
+    2) Static dataset in app/data.py (fallback for empty DB or DB errors)
+    """
+
+    shows: list[dict]
+    if db is not None:
+        try:
+            shows = _load_shows_from_db(db)
+        except Exception:
+            # Best-effort fallback: recommendations should still work even if DB is down.
+            shows = []
+    else:
+        shows = []
+
+    if not shows:
+        shows = get_all_shows()
+
+    scored: list[dict] = []
 
     for show in shows:
         # ---------- Hard filters (unchanged) ----------
@@ -90,10 +201,11 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
                 continue
 
         seasons = show.get("number_of_seasons")
-        if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > 3:
-            continue
-        if user_input.binge_preference == BingePreference.BINGE and seasons <= 3:
-            continue
+        if seasons is not None:
+            if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > 3:
+                continue
+            if user_input.binge_preference == BingePreference.BINGE and seasons <= 3:
+                continue
 
         episode_length = show.get("average_episode_length")
         if user_input.episode_length_preference == EpisodeLengthPreference.SHORT:
@@ -104,7 +216,8 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
                 continue
 
         if user_input.language_preference:
-            if show.get("language") != user_input.language_preference:
+            show_language = show.get("language")
+            if show_language and show_language != user_input.language_preference:
                 continue
 
         # ---------- Soft matching ----------
@@ -112,7 +225,7 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
         score = 0
 
         user_genres = set(g.lower() for g in user_input.preferred_genres)
-        show_genres = set(g.lower() for g in show.get("genres", []))
+        show_genres = set(g.lower() for g in _coerce_genres(show.get("genres", [])))
 
         common_genres = user_genres & show_genres
         if common_genres:
@@ -135,32 +248,70 @@ def recommend_shows(user_input: RecommendationInput) -> List[RecommendationOutpu
             mood=user_input.mood,
         )
 
-        # ---------- TMDB Enrichment ----------
-        # Fetch external metadata for this show
-        tmdb_data = search_tv_show(show["title"])
-
-        results.append(
+        scored.append(
             {
                 "score": score,
-                "show": RecommendationOutput(
-                    title=show["title"],
-                    recommendation_reason=recommendation_reason,
-                    genres=show["genres"],
-                    short_summary=show["short_summary"],
-                    content_rating=show["content_rating"],
-                    average_episode_length=show["average_episode_length"],
-                    number_of_seasons=show["number_of_seasons"],
-                    language=show["language"],
-
-                    # TMDB fields (may be None)
-                    poster_url=tmdb_data.get("poster_url") if tmdb_data else None,
-                    tmdb_rating=tmdb_data.get("rating") if tmdb_data else None,
-                    tmdb_overview=tmdb_data.get("overview") if tmdb_data else None,
-                    first_air_date=tmdb_data.get("first_air_date") if tmdb_data else None,
-                ),
+                "show": show,
+                "recommendation_reason": recommendation_reason,
             }
         )
 
-    results.sort(key=lambda x: x["score"], reverse=True)
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    top_scored = scored[: max(1, int(top_n))]
 
-    return [item["show"] for item in results]
+    outputs: list[RecommendationOutput] = []
+
+    for item in top_scored:
+        show = item["show"]
+        recommendation_reason = item["recommendation_reason"]
+
+        # ---------- TMDB Enrichment (best-effort / optional) ----------
+        tmdb_data = search_tv_show(show["title"])
+
+        # DB fallback fields (may be absent on static dataset)
+        db_poster_url = show.get("poster_url")
+        db_rating = show.get("tmdb_rating")
+        db_overview = show.get("tmdb_overview")
+        db_first_air_date: date | str | None = show.get("first_air_date")
+
+        if isinstance(db_first_air_date, date):
+            db_first_air_date_str = db_first_air_date.isoformat()
+        else:
+            db_first_air_date_str = db_first_air_date
+
+        outputs.append(
+            RecommendationOutput(
+                title=show["title"],
+                recommendation_reason=recommendation_reason,
+                genres=_coerce_genres(show.get("genres", [])),
+                short_summary=show.get("short_summary") or _build_short_summary(show.get("tmdb_overview")),
+                content_rating=show.get("content_rating"),
+                average_episode_length=show.get("average_episode_length"),
+                number_of_seasons=show.get("number_of_seasons"),
+                language=show.get("language"),
+
+                # TMDB fields (may be None). Use DB values as a fallback where safe.
+                poster_url=(
+                    tmdb_data.get("poster_url")
+                    if tmdb_data and tmdb_data.get("poster_url")
+                    else db_poster_url
+                ),
+                tmdb_rating=(
+                    tmdb_data.get("rating")
+                    if tmdb_data and tmdb_data.get("rating") is not None
+                    else db_rating
+                ),
+                tmdb_overview=(
+                    tmdb_data.get("overview")
+                    if tmdb_data and tmdb_data.get("overview")
+                    else None
+                ),
+                first_air_date=(
+                    tmdb_data.get("first_air_date")
+                    if tmdb_data and tmdb_data.get("first_air_date")
+                    else db_first_air_date_str
+                ),
+            )
+        )
+
+    return outputs

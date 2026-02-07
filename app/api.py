@@ -35,11 +35,11 @@ def db_health(db: Session = Depends(get_db)):
 # -------------------- Recommendations --------------------
 
 @app.post("/recommend", response_model=List[RecommendationOutput])
-def recommend(input_data: RecommendationInput):
+def recommend(input_data: RecommendationInput, db: Session = Depends(get_db)):
     """
     Receive user preferences and return TV show recommendations.
     """
-    return recommend_shows(input_data)
+    return recommend_shows(input_data, db=db)
 
 
 @app.get("/debug/shows")
