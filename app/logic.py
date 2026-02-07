@@ -141,6 +141,11 @@ def _build_recommendation_reason(
             reasons.append("Short, easy-to-watch episodes")
         elif episode_length_pref == EpisodeLengthPreference.LONG and episode_length > 30:
             reasons.append("Long, immersive episodes")
+    else:
+        # DB-backed shows currently don't have episode length populated.
+        # If the user explicitly asked for SHORT/LONG, be honest about missing info.
+        if episode_length_pref in (EpisodeLengthPreference.SHORT, EpisodeLengthPreference.LONG):
+            reasons.append("Episode length info is unavailable")
 
     if mood_matched:
         if mood == Mood.CHILL:
@@ -158,7 +163,16 @@ def _build_recommendation_reason(
         elif mood == Mood.CURIOUS:
             reasons.append("Great for curiosity and discovery")
 
-    return ". ".join(reasons[:2]) if reasons else None
+    # Keep the response short, but allow the "unknown episode length" note to be included.
+    if not reasons:
+        return None
+
+    top = reasons[:2]
+    note = "Episode length info is unavailable"
+    if note in reasons and note not in top:
+        top.append(note)
+
+    return ". ".join(top)
 
 
 def recommend_shows(
