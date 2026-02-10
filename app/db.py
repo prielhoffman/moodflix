@@ -6,16 +6,48 @@ from dotenv import load_dotenv
 load_dotenv()
 Base = declarative_base()
 
-DB_USER = os.getenv("POSTGRES_USER")
-DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-DB_NAME = os.getenv("POSTGRES_DB")
-DB_HOST = os.getenv("POSTGRES_HOST")
-DB_PORT = os.getenv("POSTGRES_PORT")
-
-DATABASE_URL = (
-    f"postgresql://{DB_USER}:{DB_PASSWORD}"
-    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+_REQUIRED_POSTGRES_ENV_VARS = (
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
 )
+
+
+def _build_database_url() -> str:
+    # Optional direct connection string support.
+    direct_url = os.getenv("DATABASE_URL")
+    if direct_url and direct_url.strip():
+        return direct_url.strip()
+
+    values: dict[str, str] = {}
+    missing: list[str] = []
+
+    for name in _REQUIRED_POSTGRES_ENV_VARS:
+        raw = os.getenv(name)
+        if raw is None or not raw.strip():
+            missing.append(name)
+        else:
+            values[name] = raw.strip()
+
+    if missing:
+        missing_vars = ", ".join(sorted(missing))
+        required_vars = ", ".join(_REQUIRED_POSTGRES_ENV_VARS)
+        raise RuntimeError(
+            "Database configuration is incomplete.\n"
+            f"Missing required environment variables: {missing_vars}\n"
+            f"Set DATABASE_URL or define all POSTGRES_* variables: {required_vars}\n"
+            "Tip: copy .env.example to .env and fill in the values."
+        )
+
+    return (
+        f"postgresql://{values['POSTGRES_USER']}:{values['POSTGRES_PASSWORD']}"
+        f"@{values['POSTGRES_HOST']}:{values['POSTGRES_PORT']}/{values['POSTGRES_DB']}"
+    )
+
+
+DATABASE_URL = _build_database_url()
 
 engine = create_engine(DATABASE_URL, echo=True)
 

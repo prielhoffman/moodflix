@@ -105,11 +105,27 @@ Frontend URL:
 
 ## 🔎 Environment Variables
 
-Create your own `.env` locally (this repo does **not** ship an `.env.example`).
+Copy the template and create your local `.env`:
+
+```bash
+cp .env.example .env
+```
+
+PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The `.env.example` file contains all variables used by backend runtime, docker compose defaults, auth, TMDB caching/enrichment, and optional frontend API base URL.
 
 ### Database (used by backend + Alembic)
 
-The backend builds its DB connection from `POSTGRES_*` variables:
+The backend supports either:
+- `DATABASE_URL` (preferred when set), or
+- `POSTGRES_*` variables (fallback)
+
+Using `POSTGRES_*`:
 
 ```env
 POSTGRES_USER=postgres
@@ -119,7 +135,11 @@ POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 ```
 
-> Note: A single `DATABASE_URL` is not used by the current backend code. (It may be added later as an alternative.)
+Optional direct connection string:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/moodflix
+```
 
 ### Auth / JWT
 
