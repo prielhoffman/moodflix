@@ -1,7 +1,7 @@
 import "./App.css";
 
 import { useEffect, useRef, useState } from "react";
-import { Routes, Route, useNavigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 
 import Header from "./components/Header";
 import PreferenceForm from "./components/PreferenceForm";
@@ -31,9 +31,11 @@ function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [userInfoOpen, setUserInfoOpen] = useState(false);
 
   const carouselRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   /* Load watchlist on app startup */
   useEffect(() => {
@@ -52,6 +54,23 @@ function App() {
     document.addEventListener("click", handler, true);
     return () => document.removeEventListener("click", handler, true);
   }, []);
+
+  /* Close User Info modal on Escape */
+  useEffect(() => {
+    if (!userInfoOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setUserInfoOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [userInfoOpen]);
+
+  /* Clear recommendations when navigating away from /recommend */
+  useEffect(() => {
+    if (location.pathname !== "/recommend") {
+      setRecommendations([]);
+    }
+  }, [location.pathname]);
 
   /* Load current user if token exists */
   useEffect(() => {
@@ -190,6 +209,7 @@ function App() {
     setAuthUser(null);
     setWatchlist([]);
     setError(null);
+    setUserInfoOpen(false);
   }
 
   async function toggleSave(show) {
@@ -238,6 +258,7 @@ function App() {
         onLogin={() => openAuthModal("login")}
         onRegister={() => openAuthModal("register")}
         onLogout={handleLogout}
+        onEmailClick={() => setUserInfoOpen(true)}
       />
 
       {authOpen && (
@@ -300,6 +321,34 @@ function App() {
                 {authLoading ? "Please wait..." : authTab === "login" ? "Login" : "Register"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {userInfoOpen && (
+        <div
+          className="modal-overlay"
+          onClick={() => setUserInfoOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setUserInfoOpen(false);
+          }}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>My Account</h3>
+              <button
+                className="modal-close"
+                onClick={() => setUserInfoOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="user-info-body">
+              <p>
+                <strong>Email:</strong> {authUser?.email}
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -446,7 +495,7 @@ function App() {
                     {authUser && watchlist.length === 0 && (
                       <div className="empty-watchlist">
                         <p>No saved shows yet</p>
-                        <p>Start adding some recommendations 📺</p>
+                        <p>Start adding some TV series 📺</p>
                       </div>
                     )}
 

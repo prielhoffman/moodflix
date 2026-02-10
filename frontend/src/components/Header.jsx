@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import "./Header.css";
 
-function Header({ userEmail, onLogin, onRegister, onLogout }) {
+function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
   return (
     <header className="header">
       <div className="header-inner">
@@ -26,7 +26,13 @@ function Header({ userEmail, onLogin, onRegister, onLogout }) {
         <div className="auth-area">
           {userEmail ? (
             <>
-              <span className="auth-email">{userEmail}</span>
+              <button
+                className="auth-email-button"
+                onClick={onEmailClick}
+                aria-label="View account info"
+              >
+                {userEmail}
+              </button>
               <button className="auth-button" onClick={onLogout}>
                 Logout
               </button>

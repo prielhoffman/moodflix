@@ -491,3 +491,12 @@ body {
 .auth-form .error-text {
   text-align: center;
 }
+
+/* ================= USER INFO MODAL ================= */
+
+.user-info-body {
+  padding: 0.5rem 0;
+  color: #cbd5f5;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
