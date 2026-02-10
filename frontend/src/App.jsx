@@ -46,19 +46,6 @@ function App() {
     loadWatchlist();
   }, []);
 
-  /* Debug: identify the topmost element capturing clicks */
-  useEffect(() => {
-    const handler = (e) => {
-      const el = document.elementFromPoint(
-        e.clientX ?? 0,
-        e.clientY ?? 0
-      );
-      console.log("clicked", e.target, "topmost", el);
-    };
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
-  }, []);
-
   /* Close User Info modal on Escape */
   useEffect(() => {
     if (!userInfoOpen) return;

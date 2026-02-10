@@ -232,6 +232,10 @@ cd frontend
 npm test
 ```
 
+### Debug endpoint status
+
+Debug-only endpoint(s) were removed from the backend and temporary frontend click-debug listeners were removed from the app shell.
+
 ### Swagger docs
 
 - `http://127.0.0.1:8000/docs` shows request/response shapes for all endpoints and supports trying requests interactively.
