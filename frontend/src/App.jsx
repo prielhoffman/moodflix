@@ -12,6 +12,10 @@ import {
   removeFromWatchlist,
   fetchWatchlist,
   hasAccessToken,
+  login,
+  register,
+  fetchMe,
+  logout,
 } from "./api/moodflixApi";
 
 function App() {
@@ -20,6 +24,13 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savingTitle, setSavingTitle] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authTab, setAuthTab] = useState("login"); // "login" | "register"
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState(null);
+  const [authLoading, setAuthLoading] = useState(false);
 
   const carouselRef = useRef(null);
   const navigate = useNavigate();
@@ -29,7 +40,43 @@ function App() {
     loadWatchlist();
   }, []);
 
+  /* Debug: identify the topmost element capturing clicks */
+  useEffect(() => {
+    const handler = (e) => {
+      const el = document.elementFromPoint(
+        e.clientX ?? 0,
+        e.clientY ?? 0
+      );
+      console.log("clicked", e.target, "topmost", el);
+    };
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, []);
+
+  /* Load current user if token exists */
+  useEffect(() => {
+    if (!hasAccessToken()) return;
+
+    fetchMe()
+      .then((user) => {
+        setAuthUser(user);
+        loadWatchlist();
+        if (authOpen) {
+          closeAuthModal();
+        }
+      })
+      .catch(() => {
+        logout();
+        setAuthUser(null);
+      });
+  }, []);
+
   async function loadWatchlist() {
+    if (!hasAccessToken()) {
+      setWatchlist([]);
+      return;
+    }
+
     try {
       const data = await fetchWatchlist();
       setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
@@ -74,12 +121,75 @@ function App() {
 
     if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
       setError("Please log in to save to watchlist.");
-      window.alert("Please log in to save to watchlist.");
       return;
     }
 
     setError("Could not update watchlist. Please try again.");
-    window.alert("Could not update watchlist. Please try again.");
+  }
+
+  function openAuthModal(tab) {
+    setAuthTab(tab || "login");
+    setAuthError(null);
+    setAuthOpen(true);
+  }
+
+  function closeAuthModal() {
+    setAuthOpen(false);
+    setAuthError(null);
+    setAuthLoading(false);
+    setAuthEmail("");
+    setAuthPassword("");
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+    setAuthError(null);
+    setAuthLoading(true);
+    let authSucceeded = false;
+
+    try {
+      if (authTab === "register") {
+        await register(authEmail, authPassword);
+      }
+
+      await login(authEmail, authPassword);
+      authSucceeded = true;
+
+      try {
+        const user = await fetchMe();
+        setAuthUser(user);
+      } catch (err) {
+        console.error("fetchMe failed after auth", err);
+      }
+
+      try {
+        await loadWatchlist();
+      } catch (err) {
+        console.error("Watchlist load failed after auth", err);
+        setError("Logged in, but failed to load watchlist.");
+      }
+    } catch (err) {
+      const msg = String(err?.message || "");
+      if (msg.includes("HTTP 401")) {
+        setAuthError("Invalid email or password.");
+      } else if (msg.includes("HTTP 400") && authTab === "register") {
+        setAuthError("Email already registered.");
+      } else {
+        setAuthError("Login failed. Please try again.");
+      }
+    } finally {
+      if (authSucceeded) {
+        closeAuthModal();
+      }
+      setAuthLoading(false);
+    }
+  }
+
+  function handleLogout() {
+    logout();
+    setAuthUser(null);
+    setWatchlist([]);
+    setError(null);
   }
 
   async function toggleSave(show) {
@@ -91,7 +201,7 @@ function App() {
     // Watchlist endpoints require JWT.
     if (!hasAccessToken()) {
       setError("Please log in to save to watchlist.");
-      window.alert("Please log in to save to watchlist.");
+      openAuthModal("login");
       return;
     }
 
@@ -117,12 +227,82 @@ function App() {
       setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
     } catch (err) {
       console.error("Remove failed", err);
+      handleWatchlistError(err);
     }
   }
 
   return (
     <div className="app">
-      <Header />
+      <Header
+        userEmail={authUser?.email}
+        onLogin={() => openAuthModal("login")}
+        onRegister={() => openAuthModal("register")}
+        onLogout={handleLogout}
+      />
+
+      {authOpen && (
+        <div className="modal-overlay" onClick={closeAuthModal}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{authTab === "login" ? "Login" : "Register"}</h3>
+              <button className="modal-close" onClick={closeAuthModal}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-tabs">
+              <button
+                className={`tab-button ${authTab === "login" ? "active" : ""}`}
+                onClick={() => {
+                  setAuthTab("login");
+                  setAuthError(null);
+                }}
+              >
+                Login
+              </button>
+              <button
+                className={`tab-button ${authTab === "register" ? "active" : ""}`}
+                onClick={() => {
+                  setAuthTab("register");
+                  setAuthError(null);
+                }}
+              >
+                Register
+              </button>
+            </div>
+
+            <form className="auth-form" onSubmit={handleAuthSubmit}>
+              <div className="form-group">
+                <label htmlFor="authEmail">Email</label>
+                <input
+                  id="authEmail"
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="authPassword">Password</label>
+                <input
+                  id="authPassword"
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                />
+              </div>
+
+              {authError && <p className="error-text">{authError}</p>}
+
+              <button type="submit" className="primary-button" disabled={authLoading}>
+                {authLoading ? "Please wait..." : authTab === "login" ? "Login" : "Register"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <main className="page-container">
         <div className="page-inner">
@@ -251,14 +431,26 @@ function App() {
                   <div className="content-wrapper">
                     <h2>My Watchlist</h2>
 
-                    {watchlist.length === 0 && (
+                    {!authUser && (
+                      <div className="empty-watchlist">
+                        <p>Please log in to view your watchlist</p>
+                        <button
+                          className="primary-button"
+                          onClick={() => openAuthModal("login")}
+                        >
+                          Login
+                        </button>
+                      </div>
+                    )}
+
+                    {authUser && watchlist.length === 0 && (
                       <div className="empty-watchlist">
                         <p>No saved shows yet</p>
                         <p>Start adding some recommendations 📺</p>
                       </div>
                     )}
 
-                    {watchlist.length > 0 && (
+                    {authUser && watchlist.length > 0 && (
                       <div className="watchlist-grid">
                         {watchlist.map((show, i) => (
                           <div key={i} className="watchlist-card">

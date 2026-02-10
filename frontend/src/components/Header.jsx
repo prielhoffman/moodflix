@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import "./Header.css";
 
-function Header() {
+function Header({ userEmail, onLogin, onRegister, onLogout }) {
   return (
     <header className="header">
       <div className="header-inner">
@@ -22,6 +22,26 @@ function Header() {
             Watchlist
           </NavLink>
         </nav>
+
+        <div className="auth-area">
+          {userEmail ? (
+            <>
+              <span className="auth-email">{userEmail}</span>
+              <button className="auth-button" onClick={onLogout}>
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="auth-button" onClick={onLogin}>
+                Login
+              </button>
+              <button className="auth-button secondary" onClick={onRegister}>
+                Register
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

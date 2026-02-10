@@ -423,3 +423,71 @@ body {
 .center-message > p {
   text-align: center;
 }
+
+/* ================= AUTH MODAL ================= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: #0b1220;
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid #1e293b;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #cbd5f5;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  flex: 1;
+  padding: 0.5rem 0.6rem;
+  background: #0f172a;
+  color: #cbd5f5;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.tab-button.active {
+  background: #6366f1;
+  color: white;
+  border-color: #6366f1;
+}
+
+.auth-form .form-group {
+  text-align: left;
+}
+
+.auth-form .error-text {
+  text-align: center;
+}

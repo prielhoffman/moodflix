@@ -61,3 +61,45 @@
   color: #6366f1;
   font-weight: 600;
 }
+
+/* Auth */
+
+.auth-area {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.auth-email {
+  font-size: 0.9rem;
+  color: #cbd5f5;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-button {
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.auth-button:hover {
+  background: #4f46e5;
+}
+
+.auth-button.secondary {
+  background: transparent;
+  border: 1px solid #6366f1;
+  color: #c7d2fe;
+}
+
+.auth-button.secondary:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
