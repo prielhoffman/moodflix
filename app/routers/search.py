@@ -9,36 +9,14 @@ from app.db import get_db
 from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from app.schemas import SemanticSearchRequest, SemanticSearchResult, MoreLikeThisRequest
+from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
 
 
 router = APIRouter(prefix="/search", tags=["search"])
 logger = logging.getLogger(__name__)
 
-_TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
-    10759: "action",
-    16: "animation",
-    35: "comedy",
-    80: "crime",
-    99: "documentary",
-    18: "drama",
-    10751: "family",
-    10762: "kids",
-    9648: "mystery",
-    10763: "news",
-    10764: "reality",
-    10765: "sci-fi",
-    10766: "soap",
-    10767: "talk",
-    10768: "war",
-    37: "western",
-}
-
-
 def _short_overview(text: str | None) -> str:
-    if text and text.strip():
-        t = text.strip()
-        return t if len(t) <= 220 else t[:217].rstrip() + "..."
-    return "No overview available."
+    return shorten_text(text, fallback="No overview available.")
 
 
 def normalize_genres(value) -> list[str]:
@@ -48,7 +26,7 @@ def normalize_genres(value) -> list[str]:
     out: list[str] = []
     for g in value:
         if isinstance(g, int):
-            out.append(_TMDB_TV_GENRE_ID_TO_NAME.get(g, str(g)))
+            out.append(TMDB_TV_GENRE_ID_TO_NAME.get(g, str(g)))
         elif isinstance(g, str):
             cleaned = g.strip()
             if cleaned:

@@ -15,6 +15,7 @@ from app.data import get_all_shows
 from app.tmdb import search_tv_show
 from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
+from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
 from sqlalchemy.orm import Session
 
 
@@ -34,27 +35,6 @@ _MOOD_GENRE_MAP = {
 }
 
 
-# TMDB TV genre id → name mapping (used by scripts/ingest_tmdb.py which stores genre_ids for now)
-_TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
-    10759: "action",
-    16: "animation",
-    35: "comedy",
-    80: "crime",
-    99: "documentary",
-    18: "drama",
-    10751: "family",
-    10762: "kids",
-    9648: "mystery",
-    10763: "news",
-    10764: "reality",
-    10765: "sci-fi",
-    10766: "soap",
-    10767: "talk",
-    10768: "war",
-    37: "western",
-}
-
-
 def _coerce_genres(value: Any) -> list[str]:
     """
     Normalize genres from DB/static into list[str].
@@ -68,7 +48,7 @@ def _coerce_genres(value: Any) -> list[str]:
     out: list[str] = []
     for g in value:
         if isinstance(g, int):
-            name = _TMDB_TV_GENRE_ID_TO_NAME.get(g)
+            name = TMDB_TV_GENRE_ID_TO_NAME.get(g)
             if name:
                 out.append(name)
         elif isinstance(g, str):
@@ -78,10 +58,7 @@ def _coerce_genres(value: Any) -> list[str]:
 
 
 def _build_short_summary(overview: str | None) -> str:
-    if overview and overview.strip():
-        text = overview.strip()
-        return text if len(text) <= 220 else text[:217].rstrip() + "..."
-    return "No summary available."
+    return shorten_text(overview, fallback="No summary available.")
 
 
 def _convert_show_row(row: Show) -> dict:

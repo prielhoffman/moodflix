@@ -11,29 +11,10 @@ if str(ROOT_DIR) not in sys.path:
 from app.db import SessionLocal
 from app.embeddings import EMBED_DIM, embed_texts
 from app.models import Show
+from app.shared import TMDB_TV_GENRE_ID_TO_NAME
 
 
 EXPECTED_DIM = EMBED_DIM
-
-
-_TMDB_TV_GENRE_ID_TO_NAME: dict[int, str] = {
-    10759: "action",
-    16: "animation",
-    35: "comedy",
-    80: "crime",
-    99: "documentary",
-    18: "drama",
-    10751: "family",
-    10762: "kids",
-    9648: "mystery",
-    10763: "news",
-    10764: "reality",
-    10765: "sci-fi",
-    10766: "soap",
-    10767: "talk",
-    10768: "war",
-    37: "western",
-}
 
 
 def _genres_to_string(genres: Any) -> str:
@@ -45,7 +26,7 @@ def _genres_to_string(genres: Any) -> str:
     out: list[str] = []
     for g in genres:
         if isinstance(g, int):
-            name = _TMDB_TV_GENRE_ID_TO_NAME.get(g)
+            name = TMDB_TV_GENRE_ID_TO_NAME.get(g)
             out.append(name or str(g))
         elif isinstance(g, str):
             if g.strip():
