@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 
 import Header from "./components/Header";
-import PreferenceForm from "./components/PreferenceForm";
+import AuthModal from "./components/modals/AuthModal";
+import UserInfoModal from "./components/modals/UserInfoModal";
+import HomePage from "./pages/HomePage";
+import RecommendPage from "./pages/RecommendPage";
+import WatchlistPage from "./pages/WatchlistPage";
 
 import {
   recommendShows,
@@ -261,276 +265,67 @@ function App() {
         onEmailClick={() => setUserInfoOpen(true)}
       />
 
-      {authOpen && (
-        <div className="modal-overlay" onClick={closeAuthModal}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{authTab === "login" ? "Login" : "Register"}</h3>
-              <button className="modal-close" onClick={closeAuthModal}>
-                ✕
-              </button>
-            </div>
+      <AuthModal
+        open={authOpen}
+        tab={authTab}
+        email={authEmail}
+        password={authPassword}
+        error={authError}
+        loading={authLoading}
+        onClose={closeAuthModal}
+        onTabChange={(tab) => {
+          setAuthTab(tab);
+          setAuthError(null);
+        }}
+        onEmailChange={setAuthEmail}
+        onPasswordChange={setAuthPassword}
+        onSubmit={handleAuthSubmit}
+      />
 
-            <div className="modal-tabs">
-              <button
-                className={`tab-button ${authTab === "login" ? "active" : ""}`}
-                onClick={() => {
-                  setAuthTab("login");
-                  setAuthError(null);
-                }}
-              >
-                Login
-              </button>
-              <button
-                className={`tab-button ${authTab === "register" ? "active" : ""}`}
-                onClick={() => {
-                  setAuthTab("register");
-                  setAuthError(null);
-                }}
-              >
-                Register
-              </button>
-            </div>
-
-            <form className="auth-form" onSubmit={handleAuthSubmit}>
-              <div className="form-group">
-                <label htmlFor="authEmail">Email</label>
-                <input
-                  id="authEmail"
-                  type="email"
-                  required
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="authPassword">Password</label>
-                <input
-                  id="authPassword"
-                  type="password"
-                  required
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                />
-              </div>
-
-              {authError && <p className="error-text">{authError}</p>}
-
-              <button type="submit" className="primary-button" disabled={authLoading}>
-                {authLoading ? "Please wait..." : authTab === "login" ? "Login" : "Register"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {userInfoOpen && (
-        <div
-          className="modal-overlay"
-          onClick={() => setUserInfoOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setUserInfoOpen(false);
-          }}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>My Account</h3>
-              <button
-                className="modal-close"
-                onClick={() => setUserInfoOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="user-info-body">
-              <p>
-                <strong>Email:</strong> {authUser?.email}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <UserInfoModal
+        open={userInfoOpen}
+        email={authUser?.email}
+        onClose={() => setUserInfoOpen(false)}
+      />
 
       <main className="page-container">
         <div className="page-inner">
           <Routes>
-            {/* HOME */}
             <Route
               path="/"
               element={
-                <section className="hero-section">
-                  <div className="hero-content">
-                    <h1>MoodFlix 📺</h1>
-                    <p>Tell us how you feel. We’ll tell you what to binge.</p>
-
-                    <button
-                      className="primary-button"
-                      onClick={() => navigate("/recommend")}
-                    >
-                      Tell me what to binge
-                    </button>
-                  </div>
-                </section>
+                <HomePage
+                  onStart={() => navigate("/recommend")}
+                />
               }
             />
 
-            {/* RECOMMEND */}
             <Route
               path="/recommend"
               element={
-                <section className="content-section">
-                  <div className="content-wrapper">
-                    <div className="preferences-box">
-                      <PreferenceForm onSubmit={handleFormSubmit} />
-                    </div>
-
-                    {isLoading && (
-                      <div className="status-center">
-                        <p className="loading-text">Loading...</p>
-                      </div>
-                    )}
-
-                    {error && (
-                      <div className="status-center">
-                        <p className="error-text">{error}</p>
-                      </div>
-                    )}
-
-                    {!isLoading && recommendations.length > 0 && (
-                      <div className="results-section">
-                        <h3>Recommended for you</h3>
-
-                        <div className="carousel-wrapper">
-                          <button
-                            className="carousel-arrow"
-                            onClick={() => scrollCarousel("left")}
-                          >
-                            ←
-                          </button>
-
-                          <div className="carousel-container" ref={carouselRef}>
-                            {recommendations.map((show, i) => {
-                              const saved = isSaved(show.title);
-
-                              return (
-                                <div key={i} className="poster-card">
-                                  <button
-                                    className={`save-button ${
-                                      saved ? "saved" : ""
-                                    }`}
-                                    onClick={() => toggleSave(show)}
-                                    disabled={savingTitle === show.title}
-                                  >
-                                    {saved ? "❤️ Saved" : "♡ Save"}
-                                  </button>
-
-                                  {show.poster_url ? (
-                                    <img
-                                      src={show.poster_url}
-                                      alt={show.title}
-                                      className="poster-image"
-                                    />
-                                  ) : (
-                                    <div className="poster-placeholder">
-                                      No Image
-                                    </div>
-                                  )}
-
-                                  <div className="card-content">
-                                    <h4>{show.title}</h4>
-
-                                    {show.tmdb_rating && (
-                                      <p>⭐ {show.tmdb_rating}</p>
-                                    )}
-
-                                    <p>{show.short_summary}</p>
-
-                                    <p>
-                                      <strong>Why:</strong>{" "}
-                                      {show.recommendation_reason}
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          <button
-                            className="carousel-arrow"
-                            onClick={() => scrollCarousel("right")}
-                          >
-                            →
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                  </div>
-                </section>
+                <RecommendPage
+                  onSubmitPreferences={handleFormSubmit}
+                  isLoading={isLoading}
+                  error={error}
+                  recommendations={recommendations}
+                  carouselRef={carouselRef}
+                  onScrollCarousel={scrollCarousel}
+                  isSaved={isSaved}
+                  onToggleSave={toggleSave}
+                  savingTitle={savingTitle}
+                />
               }
             />
 
-            {/* WATCHLIST */}
             <Route
               path="/watchlist"
               element={
-                <section className="content-section">
-                  <div className="content-wrapper">
-                    <h2>My Watchlist</h2>
-
-                    {!authUser && (
-                      <div className="empty-watchlist">
-                        <p>Please log in to view your watchlist</p>
-                        <button
-                          className="primary-button"
-                          onClick={() => openAuthModal("login")}
-                        >
-                          Login
-                        </button>
-                      </div>
-                    )}
-
-                    {authUser && watchlist.length === 0 && (
-                      <div className="empty-watchlist">
-                        <p>No saved shows yet</p>
-                        <p>Start adding some TV series 📺</p>
-                      </div>
-                    )}
-
-                    {authUser && watchlist.length > 0 && (
-                      <div className="watchlist-grid">
-                        {watchlist.map((show, i) => (
-                          <div key={i} className="watchlist-card">
-                            {show.poster_url ? (
-                              <img
-                                src={show.poster_url}
-                                alt={show.title}
-                                className="poster-image"
-                              />
-                            ) : (
-                              <div className="poster-placeholder">
-                                No Image
-                              </div>
-                            )}
-
-                            <h4>{show.title}</h4>
-
-                            <button
-                              className="remove-button"
-                              onClick={() =>
-                                handleRemoveFromWatchlist(show.title)
-                              }
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </section>
+                <WatchlistPage
+                  authUser={authUser}
+                  watchlist={watchlist}
+                  onOpenLogin={() => openAuthModal("login")}
+                  onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                />
               }
             />
           </Routes>
