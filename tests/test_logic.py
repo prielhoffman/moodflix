@@ -240,11 +240,11 @@ def test_tmdb_returns_none_does_not_break_logic(monkeypatch):
     recommendations should still work and all TMDB fields should be None.
     """
 
-    def mock_search_tv_show(title):
+    def mock_get_tv_details_cached(title, **_kwargs):
         return None
 
-    # Patch search_tv_show inside logic.py
-    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+    # Patch TMDB adapter function inside logic.py
+    monkeypatch.setattr("app.logic.get_tv_details_cached", mock_get_tv_details_cached)
 
     user_input = RecommendationInput(
         age=30,
@@ -281,11 +281,11 @@ def test_tmdb_returns_valid_metadata(monkeypatch):
         "first_air_date": "2021-01-01",
     }
 
-    def mock_search_tv_show(title):
+    def mock_get_tv_details_cached(title, **_kwargs):
         return mocked_tmdb_data
 
-    # Patch search_tv_show inside logic.py
-    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+    # Patch TMDB adapter function inside logic.py
+    monkeypatch.setattr("app.logic.get_tv_details_cached", mock_get_tv_details_cached)
 
     user_input = RecommendationInput(
         age=25,
@@ -315,7 +315,7 @@ def test_tmdb_enrichment_does_not_affect_existing_filters(monkeypatch):
     such as excluding TV-MA content for family context.
     """
 
-    def mock_search_tv_show(title):
+    def mock_get_tv_details_cached(title, **_kwargs):
         return {
             "poster_url": "https://example.com/poster.jpg",
             "rating": 9.0,
@@ -323,8 +323,8 @@ def test_tmdb_enrichment_does_not_affect_existing_filters(monkeypatch):
             "first_air_date": "2022-01-01",
         }
 
-    # Patch search_tv_show inside logic.py
-    monkeypatch.setattr("app.logic.search_tv_show", mock_search_tv_show)
+    # Patch TMDB adapter function inside logic.py
+    monkeypatch.setattr("app.logic.get_tv_details_cached", mock_get_tv_details_cached)
 
     user_input = RecommendationInput(
         age=35,
@@ -379,3 +379,42 @@ def test_recommend_with_query_uses_db_candidates(monkeypatch):
 
     assert results
     assert {show.title for show in results} == {"Alpha", "Beta"}
+
+
+def test_tmdb_cache_reuses_network_results_across_consecutive_recommend_calls(monkeypatch):
+    import app.tmdb as tmdb
+
+    monkeypatch.setattr(tmdb, "TMDB_API_KEY", "test-key")
+    tmdb.clear_tmdb_cache()
+
+    calls = {"count": 0}
+
+    def mock_uncached(title, *, year=None):
+        calls["count"] += 1
+        return {
+            "tmdb_id": 1000 + calls["count"],
+            "poster_url": f"https://example.com/{title}.jpg",
+            "overview": "cached overview",
+            "rating": 8.0,
+            "first_air_date": "2020-01-01",
+        }
+
+    monkeypatch.setattr("app.tmdb._search_tv_show_uncached", mock_uncached)
+
+    user_input = RecommendationInput(
+        age=30,
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.CHILL,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.ALONE,
+    )
+
+    results1 = recommend_shows(user_input, top_n=3)
+    results2 = recommend_shows(user_input, top_n=3)
+
+    assert len(results1) == 3
+    assert len(results2) == 3
+    # Only one network call per unique title; second recommend call should hit cache.
+    assert calls["count"] == 3

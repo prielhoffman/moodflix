@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, List, Optional
 
+import app.tmdb as tmdb_adapter
 from app.schemas import (
     RecommendationInput,
     RecommendationOutput,
@@ -12,11 +16,27 @@ from app.schemas import (
     WatchingContext,
 )
 from app.data import get_all_shows
-from app.tmdb import search_tv_show
+from app.tmdb import get_tv_details_cached
 from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+        return value if value > 0 else default
+    except ValueError:
+        return default
+
+
+TMDB_ENRICH_MAX_WORKERS = _int_env("TMDB_ENRICH_MAX_WORKERS", 5)
 
 
 # -------------------- Safety --------------------
@@ -65,6 +85,7 @@ def _convert_show_row(row: Show) -> dict:
     genres = _coerce_genres(row.genres)
 
     return {
+        "tmdb_id": row.tmdb_id,
         "title": row.title,
         "recommendation_reason": None,
         "genres": genres,
@@ -274,14 +295,45 @@ def recommend_shows(
     scored.sort(key=lambda x: x["score"], reverse=True)
     top_scored = scored[: max(1, int(top_n))]
 
+    tmdb_before = tmdb_adapter.get_cache_counters()
+    if len(top_scored) <= 1:
+        tmdb_enriched = [
+            get_tv_details_cached(
+                item["show"]["title"],
+                tmdb_id=item["show"].get("tmdb_id"),
+            )
+            for item in top_scored
+        ]
+    else:
+        max_workers = min(TMDB_ENRICH_MAX_WORKERS, len(top_scored))
+
+        def _enrich(item: dict) -> dict | None:
+            show = item["show"]
+            return get_tv_details_cached(
+                show["title"],
+                tmdb_id=show.get("tmdb_id"),
+            )
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # executor.map preserves input order.
+            tmdb_enriched = list(executor.map(_enrich, top_scored))
+
+    tmdb_after = tmdb_adapter.get_cache_counters()
+    cache_hits = max(0, tmdb_after["hits"] - tmdb_before["hits"])
+    network_fetches = max(0, tmdb_after["misses"] - tmdb_before["misses"])
+    if top_scored:
+        logger.debug(
+            "TMDB enrichment cache stats: total=%d cache_hits=%d network_fetches=%d",
+            len(top_scored),
+            cache_hits,
+            network_fetches,
+        )
+
     outputs: list[RecommendationOutput] = []
 
-    for item in top_scored:
+    for item, tmdb_data in zip(top_scored, tmdb_enriched):
         show = item["show"]
         recommendation_reason = item["recommendation_reason"]
-
-        # ---------- TMDB Enrichment (best-effort / optional) ----------
-        tmdb_data = search_tv_show(show["title"])
 
         # DB fallback fields (may be absent on static dataset)
         db_poster_url = show.get("poster_url")

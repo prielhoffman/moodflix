@@ -27,6 +27,14 @@ class MockResponse:
 
 # -------------------- Tests --------------------
 
+@pytest.fixture(autouse=True)
+def setup_tmdb_cache_and_key(monkeypatch):
+    # Keep tests deterministic regardless of local environment.
+    monkeypatch.setattr(tmdb, "TMDB_API_KEY", "test-key")
+    tmdb.clear_tmdb_cache()
+    yield
+    tmdb.clear_tmdb_cache()
+
 
 def test_no_results_returns_none(monkeypatch):
     """
