@@ -225,6 +225,13 @@ curl -X POST http://127.0.0.1:8000/recommend ^
 pytest
 ```
 
+### Run frontend tests
+
+```bash
+cd frontend
+npm test
+```
+
 ### Swagger docs
 
 - `http://127.0.0.1:8000/docs` shows request/response shapes for all endpoints and supports trying requests interactively.
