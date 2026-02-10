@@ -1,5 +1,36 @@
 import { useState } from "react";
 
+const SUPPORTED_GENRES = [
+  "action",
+  "animation",
+  "comedy",
+  "crime",
+  "documentary",
+  "drama",
+  "family",
+  "kids",
+  "mystery",
+  "news",
+  "reality",
+  "sci-fi",
+  "soap",
+  "talk",
+  "war",
+  "western",
+];
+
+const LANGUAGE_OPTIONS = [
+  "English",
+  "Hebrew",
+  "Spanish",
+  "German",
+  "French",
+  "Japanese",
+  "Korean",
+  "Hindi",
+  "Arabic",
+];
+
 /*
   PreferenceForm collects the user's basic preferences
   and sends them to the parent component via onSubmit.
@@ -10,6 +41,10 @@ function PreferenceForm({ onSubmit }) {
     age: "",
     mood: "chill",
     binge_preference: "binge",
+    preferred_genres: [],
+    language_preference: "",
+    episode_length_preference: "any",
+    watching_context: "alone",
     query: "",
   });
 
@@ -21,6 +56,20 @@ function PreferenceForm({ onSubmit }) {
       ...prevData,
       [name]: value,
     }));
+  }
+
+  function handleGenreToggle(genre) {
+    setFormData((prevData) => {
+      const current = prevData.preferred_genres || [];
+      const nextGenres = current.includes(genre)
+        ? current.filter((g) => g !== genre)
+        : [...current, genre];
+
+      return {
+        ...prevData,
+        preferred_genres: nextGenres,
+      };
+    });
   }
 
   // Handle form submission
@@ -39,6 +88,14 @@ function PreferenceForm({ onSubmit }) {
       delete preparedData.query;
     } else {
       preparedData.query = trimmedQuery;
+    }
+
+    if (!preparedData.language_preference) {
+      delete preparedData.language_preference;
+    }
+
+    if (preparedData.episode_length_preference === "any") {
+      delete preparedData.episode_length_preference;
     }
 
     // Send data to parent (App.jsx)
@@ -112,6 +169,74 @@ function PreferenceForm({ onSubmit }) {
           </label>
         </div>
       </div>
+
+      {/* Advanced options */}
+      <details className="advanced-options">
+        <summary>Advanced preferences</summary>
+
+        <div className="advanced-fields">
+          <div className="form-group">
+            <label>Preferred genres</label>
+            <div className="genre-grid">
+              {SUPPORTED_GENRES.map((genre) => (
+                <label key={genre} className="genre-option">
+                  <input
+                    type="checkbox"
+                    checked={formData.preferred_genres.includes(genre)}
+                    onChange={() => handleGenreToggle(genre)}
+                  />
+                  <span>{genre}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="language_preference">Language</label>
+            <select
+              id="language_preference"
+              name="language_preference"
+              value={formData.language_preference}
+              onChange={handleChange}
+            >
+              <option value="">Any</option>
+              {LANGUAGE_OPTIONS.map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="episode_length_preference">Episode length</label>
+            <select
+              id="episode_length_preference"
+              name="episode_length_preference"
+              value={formData.episode_length_preference}
+              onChange={handleChange}
+            >
+              <option value="any">Any</option>
+              <option value="short">Short (30 min max)</option>
+              <option value="long">Long (31+ min)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="watching_context">Watching context</label>
+            <select
+              id="watching_context"
+              name="watching_context"
+              value={formData.watching_context}
+              onChange={handleChange}
+            >
+              <option value="alone">Alone</option>
+              <option value="partner">Partner</option>
+              <option value="family">Family</option>
+            </select>
+          </div>
+        </div>
+      </details>
 
       {/* Optional semantic query */}
       <div className="form-group">
