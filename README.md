@@ -157,6 +157,36 @@ TMDB_API_KEY=your_tmdb_key
 
 If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`).
 
+## Demo without TMDB
+
+You can demo recommendations without TMDB and without seeded Postgres content:
+
+- Leave `TMDB_API_KEY` unset.
+- Start the backend normally.
+- Call `POST /recommend`.
+
+When the `shows` table is empty (or DB is unavailable), the app falls back to a curated static dataset in `app/data.py` with diverse genres, languages, content ratings, season counts, and episode lengths.
+
+Example payloads that should return multiple recommendations from fallback data:
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend ^
+  -H "Content-Type: application/json" ^
+  -d "{\"age\":28,\"mood\":\"chill\",\"preferred_genres\":[\"comedy\",\"slice of life\"],\"binge_preference\":\"short_series\",\"episode_length_preference\":\"short\",\"watching_context\":\"alone\"}"
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend ^
+  -H "Content-Type: application/json" ^
+  -d "{\"age\":30,\"mood\":\"adrenaline\",\"preferred_genres\":[\"action\",\"thriller\"],\"binge_preference\":\"binge\",\"episode_length_preference\":\"long\",\"watching_context\":\"partner\"}"
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/recommend ^
+  -H "Content-Type: application/json" ^
+  -d "{\"age\":12,\"mood\":\"happy\",\"preferred_genres\":[\"family\",\"animation\"],\"binge_preference\":\"short_series\",\"episode_length_preference\":\"short\",\"watching_context\":\"family\"}"
+```
+
 ### Embeddings (local, no API keys)
 
 Embeddings are generated locally via `sentence-transformers` — no API key required.
