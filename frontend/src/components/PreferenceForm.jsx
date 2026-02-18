@@ -45,7 +45,6 @@ function PreferenceForm({ onSubmit }) {
     language_preference: "",
     episode_length_preference: "any",
     watching_context: "alone",
-    query: "",
   });
 
   // Handle changes for all inputs
@@ -82,13 +81,6 @@ function PreferenceForm({ onSubmit }) {
       ...formData,
       age: Number(formData.age),
     };
-
-    const trimmedQuery = preparedData.query?.trim();
-    if (!trimmedQuery) {
-      delete preparedData.query;
-    } else {
-      preparedData.query = trimmedQuery;
-    }
 
     if (!preparedData.language_preference) {
       delete preparedData.language_preference;
@@ -237,19 +229,6 @@ function PreferenceForm({ onSubmit }) {
           </div>
         </div>
       </details>
-
-      {/* Optional semantic query */}
-      <div className="form-group">
-        <label htmlFor="query">Search (optional)</label>
-        <input
-          type="text"
-          id="query"
-          name="query"
-          placeholder="e.g., funny workplace comedy"
-          value={formData.query}
-          onChange={handleChange}
-        />
-      </div>
 
       {/* Submit button */}
       <button type="submit" className="primary-button">

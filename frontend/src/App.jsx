@@ -8,6 +8,7 @@ import AuthModal from "./components/modals/AuthModal";
 import UserInfoModal from "./components/modals/UserInfoModal";
 import HomePage from "./pages/HomePage";
 import RecommendPage from "./pages/RecommendPage";
+import SearchPage from "./pages/SearchPage";
 import WatchlistPage from "./pages/WatchlistPage";
 
 import {
@@ -314,6 +315,11 @@ function App() {
                   onRemoveFromWatchlist={handleRemoveFromWatchlist}
                 />
               }
+            />
+
+            <Route
+              path="/search"
+              element={<SearchPage />}
             />
           </Routes>
         </div>

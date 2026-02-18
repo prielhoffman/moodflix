@@ -1,6 +1,26 @@
 import { useState } from "react";
 import { semanticSearch } from "../api/moodflixApi";
 
+function parseMatchScore(reason) {
+  const match = String(reason || "").match(/Match Score:\s*(\d+)%/i);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+function scoreFromDistance(distance) {
+  const value = Number(distance);
+  if (Number.isNaN(value) || !Number.isFinite(value)) return null;
+  const score = Math.round((1 - value) * 100);
+  return Math.max(0, Math.min(100, score));
+}
+
+function getScoreClass(score) {
+  if (typeof score !== "number" || Number.isNaN(score)) return "";
+  if (score >= 80) return "score-high";
+  if (score >= 60) return "score-medium";
+  return "score-low";
+}
+
 function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -33,8 +53,8 @@ function SearchPage() {
     <section className="content-section">
       <div className="content-wrapper">
         <div className="search-hero">
-          <h2>Search by Mood/Vibe</h2>
-          <p>Describe the show you're looking for, and MoodFlix will find close matches.</p>
+          <h2>Search</h2>
+          <p>Type a free-text vibe like "small town crime series" and MoodFlix will find close matches.</p>
 
           <form className="search-form" onSubmit={handleSubmit}>
             <input
@@ -42,7 +62,7 @@ function SearchPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Describe the show you're looking for..."
+              placeholder="e.g., small town crime series"
               aria-label="Semantic search query"
             />
             <button className="primary-button search-submit" type="submit" disabled={isLoading}>
@@ -71,7 +91,11 @@ function SearchPage() {
 
         {!isLoading && results.length > 0 && (
           <div className="search-results-grid">
-            {results.map((show) => (
+            {results.map((show) => {
+              const score = parseMatchScore(show.ai_match_reason) ?? scoreFromDistance(show.distance);
+              const scoreClass = getScoreClass(score);
+
+              return (
               <article key={show.id} className="search-result-card">
                 {show.poster_url ? (
                   <img src={show.poster_url} alt={show.title} className="poster-image" />
@@ -81,15 +105,21 @@ function SearchPage() {
 
                 <div className="search-card-content">
                   <h4>{show.title}</h4>
-                  {show.ai_match_reason && (
+                  {show.vote_average != null && (
+                    <p className="rating-line">
+                      <span className="rating-star">★</span> {Number(show.vote_average).toFixed(1)}
+                    </p>
+                  )}
+                  {typeof score === "number" && (
                     <p className="match-reason">
-                      <strong>AI Match Reason:</strong> {show.ai_match_reason}
+                      <span className={`match-score ${scoreClass}`}>Match Score: {score}%</span>
                     </p>
                   )}
                   {show.overview && <p>{show.overview}</p>}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

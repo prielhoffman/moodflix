@@ -66,7 +66,11 @@ function RecommendPage({
                       <div className="card-content">
                         <h4>{show.title}</h4>
 
-                        {show.tmdb_rating && <p>⭐ {show.tmdb_rating}</p>}
+                        {show.tmdb_rating != null && (
+                          <p className="rating-line">
+                            <span className="rating-star">★</span> {Number(show.tmdb_rating).toFixed(1)}
+                          </p>
+                        )}
 
                         <p>{show.short_summary}</p>
 

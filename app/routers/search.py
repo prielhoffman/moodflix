@@ -55,6 +55,21 @@ def _distance_bucket(distance: float | None) -> str:
     return "A related semantic match"
 
 
+def _match_score_percent(distance: float | None) -> int:
+    """
+    Convert cosine distance (lower is better) to a simple percentage score.
+    score = (1 - distance) * 100, clamped to [0, 100].
+    """
+    if distance is None:
+        return 0
+    score = (1.0 - distance) * 100.0
+    if score < 0:
+        return 0
+    if score > 100:
+        return 100
+    return int(round(score))
+
+
 def _build_fallback_match_reason(query: str, title: str, genres: list[str], overview: str | None, distance: float | None) -> str:
     query_tokens = _tokenize(query)
     title_tokens = _tokenize(title)
@@ -65,20 +80,22 @@ def _build_fallback_match_reason(query: str, title: str, genres: list[str], over
     overlap_overview = query_tokens & overview_tokens
     overlap_genres = query_tokens & genre_tokens
     distance_phrase = _distance_bucket(distance)
+    score = _match_score_percent(distance)
+    prefix = f"Match Score: {score}% - {distance_phrase}"
 
     if overlap_genres:
         sample = sorted(overlap_genres)[0]
-        return f"{distance_phrase} that aligns with your {sample} vibe."
+        return f"{prefix} that aligns with your {sample} vibe."
     if overlap_title:
         sample = sorted(overlap_title)[0]
-        return f"{distance_phrase} with title cues matching '{sample}'."
+        return f"{prefix} with title cues matching '{sample}'."
     if overlap_overview:
         sample = sorted(overlap_overview)[0]
-        return f"{distance_phrase} with themes around '{sample}'."
+        return f"{prefix} with themes around '{sample}'."
     if genres:
         top_genres = ", ".join(genres[:2])
-        return f"{distance_phrase} in genres like {top_genres}."
-    return f"{distance_phrase} based on plot and tone similarity."
+        return f"{prefix} in genres like {top_genres}."
+    return f"{prefix} based on plot and tone similarity."
 
 
 @router.post("/semantic", response_model=List[SemanticSearchResult])

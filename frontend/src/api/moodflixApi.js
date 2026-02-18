@@ -279,3 +279,18 @@ export async function fetchWatchlist() {
   const raw = data.watchlist ?? data.items ?? data.results ?? [];
   return { watchlist: normalizeWatchlist(raw) };
 }
+
+/* ================= SEMANTIC SEARCH ================= */
+
+export async function semanticSearch(query, topK = 10) {
+  const trimmed = String(query || "").trim();
+  if (!trimmed) throw new Error("semanticSearch: missing query");
+
+  return await requestJson("/search/semantic", {
+    method: "POST",
+    body: JSON.stringify({
+      query: trimmed,
+      top_k: topK,
+    }),
+  });
+}

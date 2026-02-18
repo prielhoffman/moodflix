@@ -18,6 +18,10 @@ function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
             Recommend
           </NavLink>
 
+          <NavLink to="/search" className="nav-link">
+            Search
+          </NavLink>
+
           <NavLink to="/watchlist" className="nav-link">
             Watchlist
           </NavLink>
