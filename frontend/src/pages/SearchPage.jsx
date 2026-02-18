@@ -21,7 +21,7 @@ function getScoreClass(score) {
   return "score-low";
 }
 
-function SearchPage() {
+function SearchPage({ isSaved, onToggleSave, savingTitle }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -94,9 +94,17 @@ function SearchPage() {
             {results.map((show) => {
               const score = parseMatchScore(show.ai_match_reason) ?? scoreFromDistance(show.distance);
               const scoreClass = getScoreClass(score);
+              const saved = typeof isSaved === "function" ? isSaved(show.title) : false;
 
               return (
               <article key={show.id} className="search-result-card">
+                <button
+                  className={`save-button ${saved ? "saved" : ""}`}
+                  onClick={() => onToggleSave?.(show)}
+                  disabled={savingTitle === show.title}
+                >
+                  {saved ? "❤️ Saved" : "♡ Save"}
+                </button>
                 {show.poster_url ? (
                   <img src={show.poster_url} alt={show.title} className="poster-image" />
                 ) : (

@@ -319,7 +319,13 @@ function App() {
 
             <Route
               path="/search"
-              element={<SearchPage />}
+              element={
+                <SearchPage
+                  isSaved={isSaved}
+                  onToggleSave={toggleSave}
+                  savingTitle={savingTitle}
+                />
+              }
             />
           </Routes>
         </div>

@@ -193,7 +193,7 @@ def recommend_shows(
     user_input: RecommendationInput,
     *,
     db: Optional[Session] = None,
-    top_n: int = 10,
+    top_n: int = 20,
     candidate_top_k: int = 80,
 ) -> List[RecommendationOutput]:
     """
