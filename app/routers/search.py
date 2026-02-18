@@ -1,5 +1,6 @@
 from datetime import date
 import logging
+import re
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,6 +35,50 @@ def normalize_genres(value) -> list[str]:
         else:
             out.append(str(g))
     return out
+
+
+def _tokenize(text: str | None) -> set[str]:
+    if not text:
+        return set()
+    return {t for t in re.findall(r"[a-z0-9]+", text.lower()) if len(t) > 2}
+
+
+def _distance_bucket(distance: float | None) -> str:
+    if distance is None:
+        return "A relevant semantic match"
+    if distance <= 0.18:
+        return "A very close semantic match"
+    if distance <= 0.26:
+        return "A strong semantic match"
+    if distance <= 0.36:
+        return "A good semantic match"
+    return "A related semantic match"
+
+
+def _build_fallback_match_reason(query: str, title: str, genres: list[str], overview: str | None, distance: float | None) -> str:
+    query_tokens = _tokenize(query)
+    title_tokens = _tokenize(title)
+    overview_tokens = _tokenize(overview)
+    genre_tokens = _tokenize(" ".join(genres))
+
+    overlap_title = query_tokens & title_tokens
+    overlap_overview = query_tokens & overview_tokens
+    overlap_genres = query_tokens & genre_tokens
+    distance_phrase = _distance_bucket(distance)
+
+    if overlap_genres:
+        sample = sorted(overlap_genres)[0]
+        return f"{distance_phrase} that aligns with your {sample} vibe."
+    if overlap_title:
+        sample = sorted(overlap_title)[0]
+        return f"{distance_phrase} with title cues matching '{sample}'."
+    if overlap_overview:
+        sample = sorted(overlap_overview)[0]
+        return f"{distance_phrase} with themes around '{sample}'."
+    if genres:
+        top_genres = ", ".join(genres[:2])
+        return f"{distance_phrase} in genres like {top_genres}."
+    return f"{distance_phrase} based on plot and tone similarity."
 
 
 @router.post("/semantic", response_model=List[SemanticSearchResult])
@@ -72,8 +117,16 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
 
     results: list[SemanticSearchResult] = []
     for show, distance in rows:
+        distance_value = float(distance) if distance is not None else float("inf")
         first_air_date = show.first_air_date.isoformat() if isinstance(show.first_air_date, date) else None
         genres = normalize_genres(show.genres)
+        match_reason = _build_fallback_match_reason(
+            query=query,
+            title=show.title,
+            genres=genres,
+            overview=show.overview,
+            distance=distance_value if distance is not None else None,
+        )
 
         results.append(
             SemanticSearchResult(
@@ -84,7 +137,8 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
                 poster_url=show.poster_url,
                 vote_average=show.vote_average,
                 first_air_date=first_air_date,
-                distance=float(distance) if distance is not None else float("inf"),
+                distance=distance_value,
+                ai_match_reason=match_reason,
             )
         )
 

@@ -191,6 +191,7 @@ class SemanticSearchResult(BaseModel):
     id: int
     title: str
     genres: List[str] = Field(default_factory=list)
+    ai_match_reason: Optional[str] = None
     overview: str
     poster_url: Optional[str] = None
     vote_average: Optional[float] = None
