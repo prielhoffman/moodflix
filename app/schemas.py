@@ -32,7 +32,7 @@ class WatchingContext(str, Enum):
 
 
 class RecommendationInput(BaseModel):
-    age: int = Field(..., ge=0, description="User age for content suitability")
+    age: int = Field(..., ge=0, le=120, description="User age for content suitability (0-120)")
 
     binge_preference: BingePreference = Field(
         BingePreference.BINGE,
