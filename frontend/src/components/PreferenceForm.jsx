@@ -57,6 +57,23 @@ function PreferenceForm({ onSubmit }) {
     }));
   }
 
+  // Age: block non-digits at key level to avoid flicker; allow digits, Backspace, Tab, Delete, arrows
+  function handleAgeKeyDown(event) {
+    const { key } = event;
+    if (event.ctrlKey || event.metaKey) return; // allow Ctrl/Cmd+A, C, V, X
+    if (key === "Backspace" || key === "Tab" || key === "Delete" || key === "ArrowLeft" || key === "ArrowRight" || key === "Home" || key === "End") return;
+    if (/^\d$/.test(key)) return;
+    event.preventDefault();
+  }
+
+  // Age: only update state if value is empty or in range 0–120 (catches paste)
+  function handleAgeChange(event) {
+    const val = event.target.value;
+    if (val === "" || (/^\d+$/.test(val) && Number(val) >= 0 && Number(val) <= 120)) {
+      setFormData((prev) => ({ ...prev, age: val }));
+    }
+  }
+
   function handleGenreToggle(genre) {
     setFormData((prevData) => {
       const current = prevData.preferred_genres || [];
@@ -127,9 +144,11 @@ function PreferenceForm({ onSubmit }) {
           id="age"
           name="age"
           min="0"
+          max="120"
           required
           value={formData.age}
-          onChange={handleChange}
+          onKeyDown={handleAgeKeyDown}
+          onChange={handleAgeChange}
         />
       </div>
 

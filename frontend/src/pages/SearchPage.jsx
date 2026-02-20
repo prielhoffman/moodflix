@@ -31,7 +31,11 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
   async function handleSubmit(event) {
     event.preventDefault();
     const trimmed = query.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setError("Please enter a search term");
+      setHasSearched(false);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);

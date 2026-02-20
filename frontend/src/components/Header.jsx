@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import "./Header.css";
 
 function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
@@ -6,7 +6,9 @@ function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
     <header className="header">
       <div className="header-inner">
         {/* Logo */}
-        <h2 className="logo">MoodFlix 📺</h2>
+        <Link to="/" className="logo-link">
+          <h2 className="logo">MoodFlix 📺</h2>
+        </Link>
 
         {/* Navigation */}
         <nav className="nav">
