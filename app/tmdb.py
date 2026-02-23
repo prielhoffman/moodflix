@@ -66,6 +66,44 @@ def _cache_key_for_tmdb_id(tmdb_id: int | None) -> str | None:
         return None
 
 
+def _fetch_tv_content_ratings_uncached(tmdb_id: int) -> str | None:
+    """
+    Fetch content ratings for a TV series from TMDB.
+    Returns US rating if available, otherwise first rating; normalized (strip + upper).
+    """
+    if not TMDB_API_KEY:
+        return None
+    url = f"{BASE_URL}/tv/{tmdb_id}/content_ratings"
+    try:
+        response = requests.get(
+            url,
+            params={"api_key": TMDB_API_KEY},
+            timeout=(2, 5),
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code in (404, 429):
+        return None
+    response.raise_for_status()
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    results = data.get("results") or []
+    us_rating = None
+    first_rating = None
+    for item in results:
+        rating = (item.get("rating") or "").strip().upper()
+        if not rating:
+            continue
+        if first_rating is None:
+            first_rating = rating
+        if (item.get("iso_3166_1") or "").upper() == "US":
+            us_rating = rating
+            break
+    return us_rating or first_rating
+
+
 def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> dict | None:
     url = f"{BASE_URL}/search/tv"
 
@@ -99,8 +137,12 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
         return None
 
     show = results[0]
+    tmdb_id = show.get("id")
+    content_rating = None
+    if isinstance(tmdb_id, int):
+        content_rating = _fetch_tv_content_ratings_uncached(tmdb_id)
     return {
-        "tmdb_id": show.get("id"),
+        "tmdb_id": tmdb_id,
         "poster_url": (
             f"{IMAGE_BASE_URL}{show['poster_path']}"
             if show.get("poster_path")
@@ -109,6 +151,7 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
         "overview": show.get("overview"),
         "rating": show.get("vote_average"),
         "first_air_date": show.get("first_air_date"),
+        "content_rating": content_rating,
     }
 
 

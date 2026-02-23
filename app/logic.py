@@ -271,6 +271,19 @@ def _normalize_content_rating(rating: str | None) -> str | None:
     return rating.strip().upper()
 
 
+def _default_rating_for_trusted_show(show: dict) -> str | None:
+    """
+    When a show has no content_rating (e.g. from local DB), return 'PG' only if it has
+    Animation or Comedy genre, so it can pass zero-trust for Kids/Family.
+    """
+    if show.get("content_rating"):
+        return None
+    genres = {g.lower() for g in _coerce_genres(show.get("genres", []))}
+    if genres & {"animation", "comedy"}:
+        return "PG"
+    return None
+
+
 def _convert_show_row(row: Show) -> dict:
     genres = _coerce_genres(row.genres)
 
@@ -424,6 +437,8 @@ def recommend_shows(
     is_family_context = user_input.watching_context == WatchingContext.FAMILY
     effective_max_age = 12 if is_family_context else user_input.age
     is_kids_or_family = effective_max_age < 13 or is_family_context
+    # Zero-trust: require explicit family-safe rating when age < 18 or Kids/Family context.
+    zero_trust_rating = (user_input.age < 18) or is_family_context or kids_intent
 
     # Auto-genre injection: ensure kids/family when under 13 or Family context.
     user_genres = {g.lower() for g in user_input.preferred_genres if g and g.strip()}
@@ -437,13 +452,18 @@ def recommend_shows(
 
         rating_raw = show.get("content_rating")
         rating = _normalize_content_rating(rating_raw)
-
-        if is_family_context:
-            # Exclude only explicit adult ratings; allow no rating (fallback to general audience) or family-safe.
-            if rating and rating in _ADULT_RATINGS:
+        if not rating and zero_trust_rating:
+            default_pg = _default_rating_for_trusted_show(show)
+            if default_pg:
+                rating = default_pg
+                show["content_rating"] = rating
+        if zero_trust_rating:
+            # Zero-trust: only allow shows with an explicit rating in _FAMILY_SAFE_RATINGS.
+            title = show.get("title") or "Unknown"
+            if not rating or rating not in _FAMILY_SAFE_RATINGS:
+                logger.info("Blocking [%s] because rating is missing or not family-safe.", title)
                 continue
-            if rating and rating not in _FAMILY_SAFE_RATINGS:
-                continue
+            logger.info("Allowing [%s] with rating [%s].", title, rating)
         else:
             # Non-family: block adult ratings for under-16 (use effective age if we ever reuse it).
             if rating and rating in _ADULT_RATINGS and effective_max_age < 16:
@@ -543,7 +563,7 @@ def recommend_shows(
         excluded_by_user_genre = 0
         for show in shows:
             r = _normalize_content_rating(show.get("content_rating"))
-            if r and (r in _ADULT_RATINGS or r not in _FAMILY_SAFE_RATINGS):
+            if not r or r not in _FAMILY_SAFE_RATINGS:
                 excluded_by_rating += 1
                 continue
             sg = {g.lower() for g in _coerce_genres(show.get("genres", []))}
@@ -569,8 +589,10 @@ def recommend_shows(
             rid = show.get("tmdb_id") or show.get("title")
             if rid in seen_ids:
                 continue
-            r = _normalize_content_rating(show.get("content_rating"))
-            if r and r in _ADULT_RATINGS:
+            r = _normalize_content_rating(show.get("content_rating")) or _default_rating_for_trusted_show(show)
+            if r and not show.get("content_rating"):
+                show["content_rating"] = r
+            if not r or r not in _FAMILY_SAFE_RATINGS:
                 continue
             if _genres_contain_adult_ids(show.get("genres", [])):
                 continue
@@ -772,15 +794,20 @@ def recommend_shows(
         show = item["show"]
         recommendation_reason = item["recommendation_reason"]
 
-        # Post-enrichment safety: for Kids/Family, remove TV-MA, TV-14, R even if passed pre-filter.
-        if is_kids_or_family:
-            resolved_rating = _normalize_content_rating(
-                (tmdb_data or {}).get("content_rating") or show.get("content_rating")
-            )
-            if resolved_rating and resolved_rating in _ADULT_RATINGS:
+        # Post-enrichment safety: zero-trust for Kids/Family — require explicit family-safe rating.
+        resolved_rating = _normalize_content_rating(
+            (tmdb_data or {}).get("content_rating") or show.get("content_rating")
+        )
+        if resolved_rating and (tmdb_data or {}).get("content_rating"):
+            show["content_rating"] = resolved_rating
+        title = show.get("title") or "Unknown"
+        if zero_trust_rating:
+            if not resolved_rating or resolved_rating not in _FAMILY_SAFE_RATINGS:
+                logger.info("Blocking [%s] because rating is missing.", title)
                 continue
-            if is_family_context and len(outputs) >= int(top_n):
-                continue
+            logger.info("Allowing [%s] with rating [%s].", title, resolved_rating)
+        if is_family_context and len(outputs) >= int(top_n):
+            continue
 
         # DB fallback fields (may be absent on static dataset)
         db_poster_url = show.get("poster_url")
@@ -799,7 +826,7 @@ def recommend_shows(
                 recommendation_reason=recommendation_reason,
                 genres=_coerce_genres(show.get("genres", [])),
                 short_summary=show.get("short_summary") or _build_short_summary(show.get("tmdb_overview")),
-                content_rating=show.get("content_rating"),
+                content_rating=resolved_rating or show.get("content_rating"),
                 average_episode_length=show.get("average_episode_length"),
                 number_of_seasons=show.get("number_of_seasons"),
                 language=show.get("language"),
@@ -838,8 +865,10 @@ def recommend_shows(
             ids = _get_genre_ids(show.get("genres", []))
             if _FAMILY_GENRE_ID not in ids:
                 continue
-            r = _normalize_content_rating(show.get("content_rating"))
-            if r and r in _ADULT_RATINGS:
+            r = _normalize_content_rating(show.get("content_rating")) or _default_rating_for_trusted_show(show)
+            if r and not show.get("content_rating"):
+                show["content_rating"] = r
+            if not r or r not in _FAMILY_SAFE_RATINGS:
                 continue
             if _genres_contain_adult_ids(show.get("genres", [])):
                 continue
@@ -858,9 +887,14 @@ def recommend_shows(
             tmdb_data = get_tv_details_cached(show.get("title"), tmdb_id=show.get("tmdb_id"))
             resolved_rating = _normalize_content_rating(
                 (tmdb_data or {}).get("content_rating") or show.get("content_rating")
-            )
-            if resolved_rating and resolved_rating in _ADULT_RATINGS:
+            ) or _default_rating_for_trusted_show(show)
+            if resolved_rating and (tmdb_data or {}).get("content_rating"):
+                show["content_rating"] = resolved_rating
+            title = show.get("title") or "Unknown"
+            if not resolved_rating or resolved_rating not in _FAMILY_SAFE_RATINGS:
+                logger.info("Blocking [%s] because rating is missing.", title)
                 continue
+            logger.info("Allowing [%s] with rating [%s].", title, resolved_rating)
             db_first_air_date = show.get("first_air_date")
             if isinstance(db_first_air_date, date):
                 db_first_air_date_str = db_first_air_date.isoformat()
@@ -872,7 +906,7 @@ def recommend_shows(
                     recommendation_reason="Family-friendly pick.",
                     genres=_coerce_genres(show.get("genres", [])),
                     short_summary=show.get("short_summary") or _build_short_summary(show.get("tmdb_overview")),
-                    content_rating=show.get("content_rating"),
+                    content_rating=resolved_rating or show.get("content_rating"),
                     average_episode_length=show.get("average_episode_length"),
                     number_of_seasons=show.get("number_of_seasons"),
                     language=show.get("language"),
