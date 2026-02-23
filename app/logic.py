@@ -21,6 +21,7 @@ from app.tmdb import get_tv_details_cached
 from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
+from app import config
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,6 @@ _FAMILY_FRIENDLY_GENRES = {"animation", "family", "comedy"}
 
 # For relaxed Family fallback: "all ages" content must have at least one of these.
 _FAMILY_FALLBACK_GENRES = {"animation", "family", "comedy", "documentary"}
-_FAMILY_MIN_RESULTS = 10
 
 # TMDB genre IDs to block for Kids/Family (DB stores genre_ids as integers).
 _ADULT_GENRE_IDS = {80, 9648, 10768, 10763}  # Crime, Mystery, War, News
@@ -65,15 +65,6 @@ _KIDS_KEYWORD_BLOCKLIST = {
     "blood", "terrorist", "drug",
 }
 
-# Hard-coded title blacklist for Kids/Family (partial match, case-insensitive).
-_KIDS_TITLE_BLACKLIST = {
-    "law & order",
-    "grey's anatomy",
-    "greys anatomy",
-    "stranger things",
-    "the rookie",
-    "supernatural",
-}
 
 # Kids/Family safety: show must have at least one of these genre IDs (or pass exception rule).
 _KIDS_SAFE_GENRE_IDS = {10751, 10762, 16}  # Family, Kids, Animation
@@ -83,14 +74,17 @@ _FAMILY_GENRE_ID = 10751
 
 
 # -------------------- Mood → Genre soft mapping --------------------
+# Mood is the star: these genres get the mood boost. e.g. Happy prioritizes comedy & animation over drama.
 _MOOD_GENRE_MAP = {
     # Keep CHILL and FAMILIAR anchored around mainstream comfort genres.
-    Mood.CHILL: {"comedy", "sitcom", "reality", "lifestyle", "family", "romance", "drama"},
-    Mood.HAPPY: {"comedy", "romance", "family", "musical", "reality", "animation"},
+    Mood.CHILL: {"comedy", "sitcom", "reality", "lifestyle", "family", "romance"},
+    # Happy: comedy and animation first; no heavy drama.
+    Mood.HAPPY: {"comedy", "animation", "romance", "family", "musical", "reality"},
     Mood.FAMILIAR: {"sitcom", "procedural", "family", "comedy", "reality", "animation"},
     Mood.FOCUSED: {"drama", "mystery", "historical", "legal", "medical", "competition"},
     Mood.ADRENALINE: {"action", "adventure", "sci-fi", "fantasy", "survival", "competition"},
-    Mood.DARK: {"thriller", "crime", "horror", "psychological", "true crime"},
+    # Dark: thriller, horror, psychological (exclude generic 'crime' to avoid light procedurals like The Rookie).
+    Mood.DARK: {"thriller", "horror", "psychological", "true crime"},
     Mood.CURIOUS: {"documentary", "travel", "culture", "anthology", "celebrity", "reality"},
 }
 
@@ -246,12 +240,12 @@ def _title_in_kids_blacklist(title: str | None) -> bool:
 
 
 def _is_english_text(text: str | None) -> bool:
-    """Heuristic: text is mostly ASCII (English). Non-ASCII ratio < 20%."""
+    """Heuristic: text is mostly ASCII (English). Non-ASCII ratio < threshold."""
     if not text or not isinstance(text, str):
         return True
     try:
         ascii_count = sum(1 for c in text if ord(c) < 128)
-        return (ascii_count / len(text)) >= 0.8
+        return (ascii_count / len(text)) >= config.ENGLISH_ASCII_RATIO_MIN
     except (ZeroDivisionError, TypeError):
         return True
 
@@ -346,21 +340,26 @@ def _build_recommendation_reason(
 ) -> str | None:
     reasons = []
 
+    # Lead with mood when the show got a mood boost so it's visible in the reason.
+    if mood_matched:
+        mood_name = mood.value.replace("_", " ").capitalize()
+        reasons.append(f"Perfect for your {mood_name} mood!")
+
     if common_genres:
         reasons.append(
             f"Matches your interest in {', '.join(sorted(common_genres))}"
         )
 
     if seasons is not None:
-        if binge_preference == BingePreference.SHORT_SERIES and seasons <= 3:
+        if binge_preference == BingePreference.SHORT_SERIES and seasons <= config.SHORT_SERIES_MAX_SEASONS:
             reasons.append("Easy to finish in one season")
-        elif binge_preference == BingePreference.BINGE and seasons > 3:
+        elif binge_preference == BingePreference.BINGE and seasons > config.BINGE_MIN_SEASONS:
             reasons.append("Great for binge watching")
 
     if episode_length is not None:
-        if episode_length_pref == EpisodeLengthPreference.SHORT and episode_length <= 30:
+        if episode_length_pref == EpisodeLengthPreference.SHORT and episode_length <= config.SHORT_EPISODE_MAX_MINUTES:
             reasons.append("Short, easy-to-watch episodes")
-        elif episode_length_pref == EpisodeLengthPreference.LONG and episode_length > 30:
+        elif episode_length_pref == EpisodeLengthPreference.LONG and episode_length > config.LONG_EPISODE_MIN_MINUTES:
             reasons.append("Long, immersive episodes")
     else:
         # DB-backed shows currently don't have episode length populated.
@@ -388,7 +387,7 @@ def _build_recommendation_reason(
     if not reasons:
         return None
 
-    top = reasons[:2]
+    top = reasons[: config.MAX_RECOMMENDATION_REASONS]
     note = "Episode length info is unavailable"
     if note in reasons and note not in top:
         top.append(note)
@@ -400,8 +399,8 @@ def recommend_shows(
     user_input: RecommendationInput,
     *,
     db: Optional[Session] = None,
-    top_n: int = 20,
-    candidate_top_k: int = 80,
+    top_n: Optional[int] = None,
+    candidate_top_k: Optional[int] = None,
 ) -> List[RecommendationOutput]:
     """
     Recommend shows based on user input.
@@ -410,6 +409,11 @@ def recommend_shows(
     1) Postgres `shows` table (if db provided and has rows)
     2) Static dataset in app/data.py (fallback for empty DB or DB errors)
     """
+    if top_n is None:
+        top_n = config.DEFAULT_TOP_N
+    if candidate_top_k is None:
+        candidate_top_k = config.DEFAULT_CANDIDATE_TOP_K
+
     shows: list[dict] = []
 
     query_text = user_input.query.strip() if user_input.query else ""
@@ -435,8 +439,8 @@ def recommend_shows(
     kids_intent = _requests_kids_content(user_input)
     # Family context and age-based flags before building user_genres.
     is_family_context = user_input.watching_context == WatchingContext.FAMILY
-    effective_max_age = 12 if is_family_context else user_input.age
-    is_kids_or_family = effective_max_age < 13 or is_family_context
+    effective_max_age = config.FAMILY_CONTEXT_EFFECTIVE_AGE if is_family_context else user_input.age
+    is_kids_or_family = effective_max_age < config.KIDS_CUTOFF_AGE or is_family_context
     # Zero-trust: require explicit family-safe rating when age < 18 or Kids/Family context.
     zero_trust_rating = (user_input.age < 18) or is_family_context or kids_intent
 
@@ -465,8 +469,8 @@ def recommend_shows(
                 continue
             logger.info("Allowing [%s] with rating [%s].", title, rating)
         else:
-            # Non-family: block adult ratings for under-16 (use effective age if we ever reuse it).
-            if rating and rating in _ADULT_RATINGS and effective_max_age < 16:
+            # Non-family: block adult ratings below configured age.
+            if rating and rating in _ADULT_RATINGS and effective_max_age < config.ADULT_RATING_MIN_AGE:
                 continue
 
         show_genres = {g.lower() for g in _coerce_genres(show.get("genres", []))}
@@ -493,23 +497,23 @@ def recommend_shows(
         # Family context: exclude crime, horror, thriller, true crime, war (by name).
         if is_family_context and (show_genres & _FAMILY_UNSAFE_GENRES):
             continue
-        if user_input.age >= 21 and not kids_intent:
+        if user_input.age >= config.EXCLUDE_KIDS_GENRE_MIN_AGE and not kids_intent:
             if show_genres & _KIDS_GENRES:
                 continue
 
         seasons = show.get("number_of_seasons")
         if seasons is not None:
-            if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > 3:
+            if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > config.SHORT_SERIES_MAX_SEASONS:
                 continue
-            if user_input.binge_preference == BingePreference.BINGE and seasons <= 3:
+            if user_input.binge_preference == BingePreference.BINGE and seasons <= config.BINGE_MIN_SEASONS:
                 continue
 
         episode_length = show.get("average_episode_length")
         if user_input.episode_length_preference == EpisodeLengthPreference.SHORT:
-            if episode_length is not None and episode_length > 30:
+            if episode_length is not None and episode_length > config.SHORT_EPISODE_MAX_MINUTES:
                 continue
         if user_input.episode_length_preference == EpisodeLengthPreference.LONG:
-            if episode_length is not None and episode_length <= 30:
+            if episode_length is not None and episode_length <= config.LONG_EPISODE_MIN_MINUTES:
                 continue
 
         if user_input.language_preference:
@@ -557,7 +561,7 @@ def recommend_shows(
         )
 
     # Family context: debug small pool and ensure minimum results via relaxed fallback.
-    if is_family_context and len(candidate_items) < _FAMILY_MIN_RESULTS:
+    if is_family_context and len(candidate_items) < config.FAMILY_MIN_RESULTS:
         excluded_by_rating = 0
         excluded_by_genre_unsafe = 0
         excluded_by_user_genre = 0
@@ -576,7 +580,7 @@ def recommend_shows(
         logger.info(
             "Family context: candidate pool=%d (target >= %d). Exclusions: rating=%d, unsafe_genre=%d, user_genre_mismatch=%d. Total shows=%d.",
             len(candidate_items),
-            _FAMILY_MIN_RESULTS,
+            config.FAMILY_MIN_RESULTS,
             excluded_by_rating,
             excluded_by_genre_unsafe,
             excluded_by_user_genre,
@@ -614,14 +618,14 @@ def recommend_shows(
                     continue
             seasons = show.get("number_of_seasons")
             if seasons is not None:
-                if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > 3:
+                if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > config.SHORT_SERIES_MAX_SEASONS:
                     continue
-                if user_input.binge_preference == BingePreference.BINGE and seasons <= 3:
+                if user_input.binge_preference == BingePreference.BINGE and seasons <= config.BINGE_MIN_SEASONS:
                     continue
             ep = show.get("average_episode_length")
-            if user_input.episode_length_preference == EpisodeLengthPreference.SHORT and ep is not None and ep > 30:
+            if user_input.episode_length_preference == EpisodeLengthPreference.SHORT and ep is not None and ep > config.SHORT_EPISODE_MAX_MINUTES:
                 continue
-            if user_input.episode_length_preference == EpisodeLengthPreference.LONG and ep is not None and ep <= 30:
+            if user_input.episode_length_preference == EpisodeLengthPreference.LONG and ep is not None and ep <= config.LONG_EPISODE_MIN_MINUTES:
                 continue
             if wants_reality and "reality" not in sg:
                 continue
@@ -647,16 +651,16 @@ def recommend_shows(
         if not candidate_items and fallback:
             candidate_items = fallback
             logger.info("Family context: using relaxed fallback pool (%d candidates).", len(candidate_items))
-        elif candidate_items and len(candidate_items) < _FAMILY_MIN_RESULTS:
+        elif candidate_items and len(candidate_items) < config.FAMILY_MIN_RESULTS:
             existing_ids = {item["show"].get("tmdb_id") or item["show"].get("title") for item in candidate_items}
             for item in fallback:
-                if len(candidate_items) >= _FAMILY_MIN_RESULTS:
+                if len(candidate_items) >= config.FAMILY_MIN_RESULTS:
                     break
                 sid = item["show"].get("tmdb_id") or item["show"].get("title")
                 if sid not in existing_ids:
                     candidate_items.append(item)
                     existing_ids.add(sid)
-            logger.info("Family context: backfilled to %d candidates (min %d).", len(candidate_items), _FAMILY_MIN_RESULTS)
+            logger.info("Family context: backfilled to %d candidates (min %d).", len(candidate_items), config.FAMILY_MIN_RESULTS)
 
     popularity_values: list[float] = []
     vote_count_logs: list[float] = []
@@ -696,31 +700,37 @@ def recommend_shows(
         vote_count_norm = _normalize_vote_count(vote_count, vote_count_min, vote_count_max)
 
         # Mainstream hit signal: popularity is primary, vote_count supports global recognition.
-        popularity_signal = (popularity_norm * 0.75) + (vote_count_norm * 0.25)
-        base_score = (rating_norm * 0.4) + (popularity_signal * 0.6)
+        popularity_signal = (popularity_norm * config.POPULARITY_NORM_WEIGHT) + (vote_count_norm * config.VOTE_COUNT_NORM_WEIGHT)
+        base_score = (rating_norm * config.RATING_WEIGHT) + (popularity_signal * (1.0 - config.RATING_WEIGHT))
 
         # Strong genre multiplier for user-selected genres.
         genre_score = 1.0
         if user_genres and common_genres:
-            genre_score = 2.0 + min(0.6, 0.15 * (len(common_genres) - 1))
+            genre_score = config.GENRE_BASE_MULTIPLIER + min(
+                config.GENRE_EXTRA_CAP, config.GENRE_EXTRA_PER_MATCH * (len(common_genres) - 1)
+            )
 
         final_score = genre_score * base_score
 
         # Light mood boost within the already genre-filtered pool.
         if item["mood_matched"]:
-            final_score *= 1.04
+            final_score *= config.MOOD_BOOST_MULTIPLIER
 
         # Family context: boost animation, family, comedy (clean sitcoms, MasterChef-style, etc.).
         if is_family_context and (show_genres & _FAMILY_FRIENDLY_GENRES):
-            final_score *= 1.18
+            final_score *= config.FAMILY_FRIENDLY_BOOST_MULTIPLIER
 
         # Kids/Family: strong penalty for popular shows that lack Family/Kids/Animation tag.
         if is_kids_or_family and not _show_has_family_kids_animation(show.get("genres", [])):
-            final_score *= 0.1
+            final_score *= config.KIDS_WITHOUT_FAMILY_PENALTY
 
         # Extra anti talk/variety bias for chill/familiar/happy reality expectations.
         if user_input.mood in {Mood.CHILL, Mood.HAPPY, Mood.FAMILIAR} and (show_genres & _LOW_PRIORITY_GENRES):
-            final_score *= 0.92
+            final_score *= config.TALK_VARIETY_PENALTY
+
+        # Dark mood: penalize dramedies and light procedurals (comedy/family + crime).
+        if user_input.mood == Mood.DARK and (show_genres & {"comedy", "family"}):
+            final_score *= config.DARK_COMEDY_FAMILY_PENALTY
 
         # English priority: original_language missing in DB; use title/overview heuristic.
         show_language = _normalize_lang(show.get("original_language") or show.get("language"))
@@ -728,18 +738,18 @@ def recommend_shows(
         overview_eng = _is_english_text(show.get("overview") or show.get("tmdb_overview"))
         if not user_input.language_preference and not foreign_intent:
             if _is_english_language(show_language):
-                final_score *= 1.15
+                final_score *= config.ENGLISH_BOOST
             elif title_eng and overview_eng:
                 # Assume English when title/overview are mostly ASCII.
-                final_score *= 1.12
+                final_score *= config.ENGLISH_HEURISTIC_BOOST
             elif show_language:
-                if popularity_signal < 0.90 and rating_norm < 0.88:
-                    final_score *= 0.72
+                if popularity_signal < config.NON_ENGLISH_PENALTY_POPULARITY_THRESHOLD and rating_norm < config.NON_ENGLISH_PENALTY_RATING_THRESHOLD:
+                    final_score *= config.NON_ENGLISH_STRONG_PENALTY
                 else:
-                    final_score *= 0.95
+                    final_score *= config.NON_ENGLISH_SLIGHT_PENALTY
             elif not title_eng or not overview_eng:
                 # Non-ASCII text suggests non-English; slight penalty.
-                final_score *= 0.92
+                final_score *= config.NON_ASCII_PENALTY
 
         scored.append(
             {
@@ -751,7 +761,7 @@ def recommend_shows(
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     # In Family mode, take extra buffer so after output rating filter we still hit min results.
-    take = max(1, int(top_n) * 2) if is_family_context else max(1, int(top_n))
+    take = max(1, int(top_n) * config.FAMILY_BUFFER_MULTIPLIER) if is_family_context else max(1, int(top_n))
     top_scored = scored[: take]
 
     tmdb_before = tmdb_adapter.get_cache_counters()
@@ -790,11 +800,38 @@ def recommend_shows(
 
     outputs: list[RecommendationOutput] = []
 
-    for item, tmdb_data in zip(top_scored, tmdb_enriched):
-        show = item["show"]
-        recommendation_reason = item["recommendation_reason"]
+    def _resolved_seasons_and_episode_length(show: dict, tmdb_data: dict | None) -> tuple[int | None, int | None]:
+        """Prefer TMDB enriched data so post-enrichment filters use real values."""
+        td = tmdb_data or {}
+        seasons = td.get("number_of_seasons")
+        if seasons is None:
+            seasons = show.get("number_of_seasons")
+        ep_len = td.get("average_episode_length")
+        if ep_len is None:
+            ep_len = show.get("average_episode_length")
+        return seasons, ep_len
 
-        # Post-enrichment safety: zero-trust for Kids/Family — require explicit family-safe rating.
+    def _apply_post_enrichment_binge_episode_filters(
+        resolved_seasons: int | None,
+        resolved_ep_length: int | None,
+    ) -> bool:
+        """True if show passes binge and episode-length filters using enriched data."""
+        if user_input.binge_preference == BingePreference.SHORT_SERIES and resolved_seasons is not None:
+            if resolved_seasons > config.SHORT_SERIES_MAX_SEASONS:
+                return False
+        if user_input.binge_preference == BingePreference.BINGE and resolved_seasons is not None:
+            if resolved_seasons <= config.BINGE_MIN_SEASONS:
+                return False
+        if user_input.episode_length_preference == EpisodeLengthPreference.SHORT and resolved_ep_length is not None:
+            if resolved_ep_length > config.SHORT_EPISODE_MAX_MINUTES:
+                return False
+        if user_input.episode_length_preference == EpisodeLengthPreference.LONG and resolved_ep_length is not None:
+            if resolved_ep_length <= config.LONG_EPISODE_MIN_MINUTES:
+                return False
+        return True
+
+    def _build_output(item: dict, tmdb_data: dict | None, show: dict) -> RecommendationOutput | None:
+        """Build one RecommendationOutput from item + tmdb_data; apply filters; return None if dropped."""
         resolved_rating = _normalize_content_rating(
             (tmdb_data or {}).get("content_rating") or show.get("content_rating")
         )
@@ -804,56 +841,93 @@ def recommend_shows(
         if zero_trust_rating:
             if not resolved_rating or resolved_rating not in _FAMILY_SAFE_RATINGS:
                 logger.info("Blocking [%s] because rating is missing.", title)
-                continue
+                return None
             logger.info("Allowing [%s] with rating [%s].", title, resolved_rating)
-        if is_family_context and len(outputs) >= int(top_n):
-            continue
-
-        # DB fallback fields (may be absent on static dataset)
+        resolved_seasons, resolved_ep_length = _resolved_seasons_and_episode_length(show, tmdb_data)
+        if resolved_seasons is not None:
+            show["number_of_seasons"] = resolved_seasons
+        if resolved_ep_length is not None:
+            show["average_episode_length"] = resolved_ep_length
+        if not _apply_post_enrichment_binge_episode_filters(resolved_seasons, resolved_ep_length):
+            logger.info("Dropping [%s] after enrichment: binge/episode length mismatch.", title)
+            return None
+        show_genres = {g.lower() for g in _coerce_genres(show.get("genres", []))}
+        common_genres = user_genres & show_genres
+        mood_matched = bool(show_genres & _MOOD_GENRE_MAP.get(user_input.mood, set()))
+        recommendation_reason = _build_recommendation_reason(
+            common_genres=common_genres,
+            binge_preference=user_input.binge_preference,
+            seasons=resolved_seasons,
+            episode_length=resolved_ep_length,
+            episode_length_pref=user_input.episode_length_preference,
+            mood_matched=mood_matched,
+            mood=user_input.mood,
+        )
         db_poster_url = show.get("poster_url")
         db_rating = show.get("tmdb_rating")
         db_overview = show.get("tmdb_overview")
         db_first_air_date: date | str | None = show.get("first_air_date")
-
         if isinstance(db_first_air_date, date):
             db_first_air_date_str = db_first_air_date.isoformat()
         else:
             db_first_air_date_str = db_first_air_date
-
-        outputs.append(
-            RecommendationOutput(
-                title=show["title"],
-                recommendation_reason=recommendation_reason,
-                genres=_coerce_genres(show.get("genres", [])),
-                short_summary=show.get("short_summary") or _build_short_summary(show.get("tmdb_overview")),
-                content_rating=resolved_rating or show.get("content_rating"),
-                average_episode_length=show.get("average_episode_length"),
-                number_of_seasons=show.get("number_of_seasons"),
-                language=show.get("language"),
-
-                # TMDB fields (may be None). Use DB values as a fallback where safe.
-                poster_url=(
-                    tmdb_data.get("poster_url")
-                    if tmdb_data and tmdb_data.get("poster_url")
-                    else db_poster_url
-                ),
-                tmdb_rating=(
-                    tmdb_data.get("rating")
-                    if tmdb_data and tmdb_data.get("rating") is not None
-                    else db_rating
-                ),
-                tmdb_overview=(
-                    tmdb_data.get("overview")
-                    if tmdb_data and tmdb_data.get("overview")
-                    else None
-                ),
-                first_air_date=(
-                    tmdb_data.get("first_air_date")
-                    if tmdb_data and tmdb_data.get("first_air_date")
-                    else db_first_air_date_str
-                ),
-            )
+        return RecommendationOutput(
+            title=show["title"],
+            recommendation_reason=recommendation_reason,
+            genres=_coerce_genres(show.get("genres", [])),
+            short_summary=show.get("short_summary") or _build_short_summary(show.get("tmdb_overview")),
+            content_rating=resolved_rating or show.get("content_rating"),
+            average_episode_length=show.get("average_episode_length"),
+            number_of_seasons=show.get("number_of_seasons"),
+            language=show.get("language"),
+            poster_url=(
+                tmdb_data.get("poster_url")
+                if tmdb_data and tmdb_data.get("poster_url")
+                else db_poster_url
+            ),
+            tmdb_rating=(
+                tmdb_data.get("rating")
+                if tmdb_data and tmdb_data.get("rating") is not None
+                else db_rating
+            ),
+            tmdb_overview=(
+                tmdb_data.get("overview")
+                if tmdb_data and tmdb_data.get("overview")
+                else None
+            ),
+            first_air_date=(
+                tmdb_data.get("first_air_date")
+                if tmdb_data and tmdb_data.get("first_air_date")
+                else db_first_air_date_str
+            ),
         )
+
+    for item, tmdb_data in zip(top_scored, tmdb_enriched):
+        if is_family_context and len(outputs) >= int(top_n):
+            continue
+        show = item["show"]
+        out = _build_output(item, tmdb_data, show)
+        if out is not None:
+            outputs.append(out)
+
+    # Refill from scored list if post-enrichment filters dropped too many.
+    refill_idx = take
+    while len(outputs) < int(top_n) and refill_idx < len(scored):
+        item = scored[refill_idx]
+        refill_idx += 1
+        show = item["show"]
+        tmdb_data = get_tv_details_cached(
+            show.get("title"),
+            tmdb_id=show.get("tmdb_id"),
+        )
+        out = _build_output(item, tmdb_data, show)
+        if out is not None:
+            outputs.append(out)
+        if len(outputs) >= int(top_n):
+            break
+    if refill_idx > take and outputs:
+        logger.debug("Post-enrichment refill: used %d extra candidates to reach top_n.", refill_idx - take)
+    outputs = outputs[: int(top_n)]
 
     # Clean fallback: if Kids/Family and too few results, fill remaining slots only with Family (10751) shows.
     if is_kids_or_family and len(outputs) < int(top_n):

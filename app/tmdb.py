@@ -104,6 +104,44 @@ def _fetch_tv_content_ratings_uncached(tmdb_id: int) -> str | None:
     return us_rating or first_rating
 
 
+def _fetch_tv_details_uncached(tmdb_id: int) -> dict | None:
+    """
+    Fetch TV show details by ID (number_of_seasons, episode_run_time).
+    Used for post-enrichment binge and episode-length filtering.
+    """
+    if not TMDB_API_KEY or not isinstance(tmdb_id, int):
+        return None
+    url = f"{BASE_URL}/tv/{tmdb_id}"
+    try:
+        response = requests.get(
+            url,
+            params={"api_key": TMDB_API_KEY, "language": "en-US"},
+            timeout=(2, 5),
+        )
+    except requests.RequestException:
+        return None
+    if response.status_code in (404, 429):
+        return None
+    try:
+        response.raise_for_status()
+        data = response.json()
+    except (requests.HTTPError, ValueError):
+        return None
+    number_of_seasons = data.get("number_of_seasons")
+    if number_of_seasons is not None and not isinstance(number_of_seasons, int):
+        number_of_seasons = None
+    run_times = data.get("episode_run_time") or []
+    average_episode_length = None
+    if run_times:
+        valid = [int(x) for x in run_times if isinstance(x, (int, float)) and x > 0]
+        if valid:
+            average_episode_length = int(round(sum(valid) / len(valid)))
+    return {
+        "number_of_seasons": number_of_seasons,
+        "average_episode_length": average_episode_length,
+    }
+
+
 def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> dict | None:
     url = f"{BASE_URL}/search/tv"
 
@@ -139,8 +177,14 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
     show = results[0]
     tmdb_id = show.get("id")
     content_rating = None
+    number_of_seasons = None
+    average_episode_length = None
     if isinstance(tmdb_id, int):
         content_rating = _fetch_tv_content_ratings_uncached(tmdb_id)
+        details = _fetch_tv_details_uncached(tmdb_id)
+        if details:
+            number_of_seasons = details.get("number_of_seasons")
+            average_episode_length = details.get("average_episode_length")
     return {
         "tmdb_id": tmdb_id,
         "poster_url": (
@@ -152,6 +196,8 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
         "rating": show.get("vote_average"),
         "first_air_date": show.get("first_air_date"),
         "content_rating": content_rating,
+        "number_of_seasons": number_of_seasons,
+        "average_episode_length": average_episode_length,
     }
 
 
