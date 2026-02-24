@@ -1,7 +1,10 @@
+import logging
 from typing import List
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -10,6 +13,13 @@ from app.routers import auth, watchlist
 from app.routers import search
 from app.schemas import RecommendationInput, RecommendationOutput
 from app.logic import recommend_shows
+from app.exceptions import (
+    AppException,
+    ErrorResponse,
+    INTERNAL_ERROR,
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MoodFlix")
 
@@ -26,6 +36,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# -------------------- Global Exception Handlers --------------------
+
+def _error_json(response: ErrorResponse) -> dict:
+    return response.model_dump()
+
+
+@app.exception_handler(AppException)
+def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    headers = {}
+    if exc.status_code == 401:
+        headers["WWW-Authenticate"] = "Bearer"
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=_error_json(exc.to_response()),
+        headers=headers,
+    )
+
+
+@app.exception_handler(HTTPException)
+def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    detail = exc.detail
+    if isinstance(detail, dict):
+        message = detail.get("message", str(detail))
+        details = {k: v for k, v in detail.items() if k != "message"}
+    else:
+        message = str(detail) if detail else "Request failed"
+        details = {}
+    error_code = f"HTTP_{exc.status_code}"
+    body = ErrorResponse(error_code=error_code, message=message, details=details)
+    return JSONResponse(status_code=exc.status_code, content=_error_json(body))
+
+
+@app.exception_handler(Exception)
+def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "Unhandled exception: %s",
+        exc,
+        exc_info=True,
+        extra={"path": request.url.path, "method": request.method},
+    )
+    body = ErrorResponse(
+        error_code=INTERNAL_ERROR,
+        message="An unexpected error occurred. Please try again later.",
+        details={},
+    )
+    return JSONResponse(status_code=500, content=_error_json(body))
+
+
 # -------------------- Health Check --------------------
 
 @app.get("/health/db")
@@ -40,4 +99,15 @@ def recommend(input_data: RecommendationInput, db: Session = Depends(get_db)):
     """
     Receive user preferences and return TV show recommendations.
     """
-    return recommend_shows(input_data, db=db)
+    try:
+        return recommend_shows(input_data, db=db)
+    except AppException:
+        raise
+    except Exception as e:
+        logger.exception("Recommendation failed: %s", e)
+        raise AppException(
+            status_code=503,
+            error_code="SERVICE_UNAVAILABLE",
+            message="Recommendations are temporarily unavailable. Please try again later.",
+            details={},
+        ) from e

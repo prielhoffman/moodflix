@@ -3,7 +3,7 @@ import logging
 import re
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -11,6 +11,14 @@ from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from app.schemas import SemanticSearchRequest, SemanticSearchResult, MoreLikeThisRequest
 from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
+from app.exceptions import (
+    AppException,
+    QUERY_REQUIRED,
+    EMBEDDING_ERROR,
+    SEARCH_FAILED,
+    SHOW_NOT_FOUND,
+    SHOW_NO_EMBEDDING,
+)
 
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -106,15 +114,22 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
     """
     query = payload.query.strip()
     if not query:
-        raise HTTPException(status_code=400, detail="query cannot be empty")
+        raise AppException(
+            status_code=400,
+            error_code=QUERY_REQUIRED,
+            message="Query cannot be empty",
+            details={},
+        )
 
     top_k = min(int(payload.top_k or 10), 50)
 
     query_vec = embed_text(query)
     if len(query_vec) != EMBED_DIM:
-        raise HTTPException(
+        raise AppException(
             status_code=500,
-            detail=f"Embedding dim mismatch: got {len(query_vec)} expected {EMBED_DIM}",
+            error_code=EMBEDDING_ERROR,
+            message="Embedding failed; please try again.",
+            details={},
         )
 
     # Cosine distance is appropriate for normalized embeddings (lower = more similar).
@@ -130,7 +145,12 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
         )
     except Exception as e:
         logger.exception("Semantic search DB query failed")
-        raise HTTPException(status_code=500, detail=f"Semantic search DB query failed: {e}") from e
+        raise AppException(
+            status_code=503,
+            error_code=SEARCH_FAILED,
+            message="Search is temporarily unavailable. Please try again later.",
+            details={},
+        ) from e
 
     results: list[SemanticSearchResult] = []
     for show, distance in rows:
@@ -168,9 +188,19 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
 def more_like_this(payload: MoreLikeThisRequest, db: Session = Depends(get_db)):
     show = db.query(Show).filter(Show.id == payload.show_id).first()
     if show is None:
-        raise HTTPException(status_code=404, detail="Show not found")
+        raise AppException(
+            status_code=404,
+            error_code=SHOW_NOT_FOUND,
+            message="Show not found",
+            details={"show_id": payload.show_id},
+        )
     if show.embedding is None:
-        raise HTTPException(status_code=400, detail="Show does not have an embedding")
+        raise AppException(
+            status_code=400,
+            error_code=SHOW_NO_EMBEDDING,
+            message="Show does not have an embedding",
+            details={"show_id": payload.show_id},
+        )
 
     top_k = min(int(payload.top_k or 10), 50)
     distance_expr = Show.embedding.cosine_distance(show.embedding).label("distance")

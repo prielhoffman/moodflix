@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
 from app.models import WatchlistItem, User, Show
 from app.schemas import WatchlistAddRequest, WatchlistRemoveRequest
 from app.dependencies import get_current_user
+from app.exceptions import AppException, SHOW_NOT_FOUND, INVALID_REQUEST
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -51,7 +52,12 @@ def add_to_watchlist(
 ):
     show = db.query(Show).filter(Show.id == payload.show_id).first()
     if show is None:
-        raise HTTPException(status_code=404, detail="Show not found")
+        raise AppException(
+            status_code=404,
+            error_code=SHOW_NOT_FOUND,
+            message="Show not found",
+            details={"show_id": payload.show_id},
+        )
 
     existing = (
         db.query(WatchlistItem)
@@ -98,7 +104,12 @@ def remove_from_watchlist(
     else:
         title = (payload.title or "").strip()
         if not title:
-            raise HTTPException(status_code=400, detail="Either show_id or title must be provided")
+            raise AppException(
+                status_code=400,
+                error_code=INVALID_REQUEST,
+                message="Either show_id or title must be provided",
+                details={},
+            )
         item = (
             db.query(WatchlistItem)
             .filter(

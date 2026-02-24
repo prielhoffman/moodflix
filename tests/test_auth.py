@@ -68,7 +68,9 @@ def test_register_duplicate_email_rejected():
     res = _register(client, "dupe@example.com")
 
     assert res.status_code == 400
-    assert res.json()["detail"] == "Email already registered"
+    data = res.json()
+    assert data["error_code"] == "USER_ALREADY_EXISTS"
+    assert data["message"] == "Email already registered"
 
 
 def test_login_success():
@@ -91,7 +93,9 @@ def test_login_wrong_password_rejected():
     res = _login(client, "login-fail@example.com", "wrong-pass")
 
     assert res.status_code == 401
-    assert res.json()["detail"] == "Invalid credentials"
+    data = res.json()
+    assert data["error_code"] == "INVALID_CREDENTIALS"
+    assert data["message"] == "Invalid credentials"
 
 
 def test_auth_me_with_valid_token_returns_user():
