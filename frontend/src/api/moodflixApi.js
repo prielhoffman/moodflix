@@ -81,7 +81,7 @@ function cacheShowsPosters(shows) {
 /*
   Normalize backend watchlist response
   into unified format:
-  [{ title, poster_url }]
+  [{ show_id?, title, poster_url }]
 */
 function normalizeWatchlist(rawWatchlist) {
   const cache = loadPosterCache();
@@ -91,20 +91,22 @@ function normalizeWatchlist(rawWatchlist) {
   // If backend returns ["title1", "title2"]
   if (rawWatchlist.length > 0 && typeof rawWatchlist[0] === "string") {
     return rawWatchlist.map((title) => ({
+      show_id: null,
       title,
       poster_url: cache[title] || null,
     }));
   }
 
-  // If backend returns objects
+  // If backend returns objects (show_id, title, poster_url)
   return rawWatchlist
     .map((item) => {
       const title = item?.title;
       if (!title) return null;
 
       return {
+        show_id: item?.show_id ?? null,
         title,
-        poster_url: item?.poster_url || cache[title] || null,
+        poster_url: item?.poster_url ?? cache[title] ?? null,
       };
     })
     .filter(Boolean);
@@ -218,18 +220,18 @@ export async function recommendShows(preferences) {
 /* ================= WATCHLIST ================= */
 
 /*
-  Supports both:
-  addToWatchlist("Title")
-  addToWatchlist(showObject)
+  Add by show_id (required). Pass a show object with id or { show_id }.
+  Example: addToWatchlist(show) or addToWatchlist({ show_id: 123 })
 */
 export async function addToWatchlist(input) {
-  const title = typeof input === "string" ? input : input?.title;
+  const showId = typeof input === "object" && input != null ? input.id ?? input.show_id : null;
+  if (showId == null || Number(showId) <= 0) {
+    throw new Error("addToWatchlist: show must have an id (show_id)");
+  }
 
   if (typeof input === "object" && input?.title && input?.poster_url) {
     cacheShowsPosters([input]);
   }
-
-  if (!title) throw new Error("addToWatchlist: missing title");
 
   const data = await tryPaths(
     [
@@ -240,7 +242,7 @@ export async function addToWatchlist(input) {
     ],
     {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ show_id: Number(showId) }),
     }
   );
 
@@ -248,8 +250,25 @@ export async function addToWatchlist(input) {
   return { watchlist: normalizeWatchlist(raw) };
 }
 
-export async function removeFromWatchlist(title) {
-  if (!title) throw new Error("removeFromWatchlist: missing title");
+/*
+  Remove by show_id (preferred) or title. Pass item or { show_id } or { title } or string title.
+*/
+export async function removeFromWatchlist(itemOrTitle) {
+  let body;
+  if (typeof itemOrTitle === "string" && itemOrTitle.trim()) {
+    body = { title: itemOrTitle.trim() };
+  } else if (typeof itemOrTitle === "object" && itemOrTitle != null) {
+    const id = itemOrTitle.show_id ?? itemOrTitle.id;
+    if (id != null && Number(id) > 0) {
+      body = { show_id: Number(id) };
+    } else if (itemOrTitle.title) {
+      body = { title: String(itemOrTitle.title).trim() };
+    } else {
+      throw new Error("removeFromWatchlist: item must have show_id or title");
+    }
+  } else {
+    throw new Error("removeFromWatchlist: pass item (show_id/title) or title string");
+  }
 
   const data = await tryPaths(
     [
@@ -262,7 +281,7 @@ export async function removeFromWatchlist(title) {
     ],
     {
       method: "POST",
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(body),
     }
   );
 

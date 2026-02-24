@@ -1,25 +1,41 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_db
-from app.models import WatchlistItem, User
-from app.schemas import WatchlistTitle
+from app.models import WatchlistItem, User, Show
+from app.schemas import WatchlistAddRequest, WatchlistRemoveRequest
 from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
-def _serialize_watchlist(items):
-    return [{"title": i.title} for i in items]
+def _serialize_item(item: WatchlistItem) -> dict:
+    """Build watchlist entry: prefer show relation for title/poster_url, else denormalized title."""
+    title = item.title
+    poster_url = None
+    show_id = item.show_id
+    if item.show is not None:
+        title = title or item.show.title
+        poster_url = item.show.poster_url
+    return {
+        "show_id": show_id,
+        "title": title or "Unknown",
+        "poster_url": poster_url,
+    }
 
 
-@router.get("")
+def _serialize_watchlist(items: list[WatchlistItem]) -> list[dict]:
+    return [_serialize_item(i) for i in items]
+
+
+@router.get("", response_model=dict)
 def fetch_watchlist(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     items = (
         db.query(WatchlistItem)
+        .options(joinedload(WatchlistItem.show))
         .filter(WatchlistItem.user_id == current_user.id)
         .order_by(WatchlistItem.created_at.desc())
         .all()
@@ -27,32 +43,36 @@ def fetch_watchlist(
     return {"watchlist": _serialize_watchlist(items)}
 
 
-@router.post("/add")
+@router.post("/add", response_model=dict)
 def add_to_watchlist(
-    payload: WatchlistTitle,
+    payload: WatchlistAddRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    title = payload.title.strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="Title cannot be empty")
+    show = db.query(Show).filter(Show.id == payload.show_id).first()
+    if show is None:
+        raise HTTPException(status_code=404, detail="Show not found")
 
     existing = (
         db.query(WatchlistItem)
         .filter(
             WatchlistItem.user_id == current_user.id,
-            WatchlistItem.title == title,
+            WatchlistItem.show_id == payload.show_id,
         )
         .first()
     )
     if not existing:
-        item = WatchlistItem(title=title, user_id=current_user.id)
+        item = WatchlistItem(
+            show_id=payload.show_id,
+            title=show.title,
+            user_id=current_user.id,
+        )
         db.add(item)
         db.commit()
 
-    # Return updated list (matches frontend expectations)
     items = (
         db.query(WatchlistItem)
+        .options(joinedload(WatchlistItem.show))
         .filter(WatchlistItem.user_id == current_user.id)
         .order_by(WatchlistItem.created_at.desc())
         .all()
@@ -60,31 +80,41 @@ def add_to_watchlist(
     return {"watchlist": _serialize_watchlist(items)}
 
 
-@router.post("/remove")
+@router.post("/remove", response_model=dict)
 def remove_from_watchlist(
-    payload: WatchlistTitle,
+    payload: WatchlistRemoveRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    title = payload.title.strip()
-    if not title:
-        raise HTTPException(status_code=400, detail="Title cannot be empty")
-
-    item = (
-        db.query(WatchlistItem)
-        .filter(
-            WatchlistItem.user_id == current_user.id,
-            WatchlistItem.title == title,
+    if payload.show_id is not None:
+        item = (
+            db.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == current_user.id,
+                WatchlistItem.show_id == payload.show_id,
+            )
+            .first()
         )
-        .first()
-    )
+    else:
+        title = (payload.title or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="Either show_id or title must be provided")
+        item = (
+            db.query(WatchlistItem)
+            .filter(
+                WatchlistItem.user_id == current_user.id,
+                WatchlistItem.title == title,
+            )
+            .first()
+        )
+
     if item:
         db.delete(item)
         db.commit()
 
-    # Return updated list
     items = (
         db.query(WatchlistItem)
+        .options(joinedload(WatchlistItem.show))
         .filter(WatchlistItem.user_id == current_user.id)
         .order_by(WatchlistItem.created_at.desc())
         .all()

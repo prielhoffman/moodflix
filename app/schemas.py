@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, model_validator
 
 
 # --------------------------------- INPUT ---------------------------------
@@ -72,6 +72,7 @@ class RecommendationInput(BaseModel):
 
 # --------------------------------- OUTPUT ---------------------------------
 class RecommendationOutput(BaseModel):
+    id: Optional[int] = Field(None, description="Show ID (shows.id) when from DB; for watchlist add by show_id")
     title: str = Field(..., description="Title of the TV show")
 
     recommendation_reason: Optional[str] = Field(
@@ -139,10 +140,31 @@ class SaveRequest(BaseModel):
     title: str = Field(..., description="Title of the show to save/remove")
 
 
+class WatchlistAddRequest(BaseModel):
+    show_id: int = Field(..., ge=1, description="ID of the show (shows.id) to add")
+
+
+class WatchlistRemoveRequest(BaseModel):
+    show_id: Optional[int] = Field(None, ge=1, description="ID of the show to remove")
+    title: Optional[str] = Field(None, description="Title of the show to remove (legacy / when show_id not set)")
+
+    @model_validator(mode="after")
+    def at_least_one_identifier(self):
+        if self.show_id is None and (self.title is None or not str(self.title).strip()):
+            raise ValueError("Either show_id or title must be provided")
+        return self
+
+
+class WatchlistItemOut(BaseModel):
+    show_id: Optional[int] = Field(None, description="ID of the show (null for legacy items)")
+    title: str = Field(..., description="Show title (from show or denormalized)")
+    poster_url: Optional[str] = Field(None, description="Poster URL when available from show")
+
+
 class WatchlistResponse(BaseModel):
-    watchlist: List[str] = Field(
+    watchlist: List[WatchlistItemOut] = Field(
         default_factory=list,
-        description="List of saved show titles",
+        description="List of watchlist entries",
     )
 
 # --------------------------------- AUTH ---------------------------------
@@ -177,6 +199,7 @@ class Token(BaseModel):
 
 # ----------------------------------------------------
 class WatchlistTitle(BaseModel):
+    """Legacy: add/remove by title only. Prefer WatchlistAddRequest / WatchlistRemoveRequest with show_id."""
     title: str
 
 # --------------------------------- SEMANTIC SEARCH ---------------------------------

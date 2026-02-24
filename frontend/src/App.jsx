@@ -122,9 +122,18 @@ function App() {
     });
   }
 
-  /* Check if show exists in watchlist */
-  function isSaved(title) {
-    return watchlist.some((item) => item?.title === title);
+  /* Check if show or title exists in watchlist (by show_id or title) */
+  function isSaved(showOrTitle) {
+    if (showOrTitle == null) return false;
+    if (typeof showOrTitle === "string") {
+      return watchlist.some((item) => item?.title === showOrTitle);
+    }
+    const id = showOrTitle.id ?? showOrTitle.show_id;
+    const title = showOrTitle.title;
+    return watchlist.some(
+      (item) =>
+        (id != null && item?.show_id === id) || item?.title === title
+    );
   }
 
   function handleWatchlistError(err) {
@@ -206,11 +215,9 @@ function App() {
 
   async function toggleSave(show) {
     const title = show?.title;
-
     if (!title) return;
     if (savingTitle) return;
 
-    // Watchlist endpoints require JWT.
     if (!hasAccessToken()) {
       setError("Please log in to save to watchlist.");
       openAuthModal("login");
@@ -220,11 +227,18 @@ function App() {
     setSavingTitle(title);
 
     try {
-      const data = isSaved(title)
-        ? await removeFromWatchlist(title)
-        : await addToWatchlist(show);
-
-      setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
+      if (isSaved(show)) {
+        const data = await removeFromWatchlist(show);
+        setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
+      } else {
+        const id = show.id ?? show.show_id;
+        if (id == null || Number(id) <= 0) {
+          setError("This show isn't in the catalog and can't be added to the watchlist.");
+          return;
+        }
+        const data = await addToWatchlist(show);
+        setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
+      }
     } catch (err) {
       console.error(err);
       handleWatchlistError(err);
@@ -233,9 +247,9 @@ function App() {
     }
   }
 
-  async function handleRemoveFromWatchlist(title) {
+  async function handleRemoveFromWatchlist(item) {
     try {
-      const data = await removeFromWatchlist(title);
+      const data = await removeFromWatchlist(item);
       setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
     } catch (err) {
       console.error("Remove failed", err);

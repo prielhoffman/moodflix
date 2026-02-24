@@ -28,7 +28,7 @@ function WatchlistPage({
         {authUser && watchlist.length > 0 && (
           <div className="watchlist-grid">
             {watchlist.map((show, i) => (
-              <div key={i} className="watchlist-card">
+              <div key={show.show_id ?? show.title ?? i} className="watchlist-card">
                 {show.poster_url ? (
                   <img
                     src={show.poster_url}
@@ -43,7 +43,7 @@ function WatchlistPage({
 
                 <button
                   className="remove-button"
-                  onClick={() => onRemoveFromWatchlist(show.title)}
+                  onClick={() => onRemoveFromWatchlist(show)}
                 >
                   Remove
                 </button>

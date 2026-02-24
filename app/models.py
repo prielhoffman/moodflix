@@ -20,11 +20,13 @@ class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
+    show_id = Column(Integer, ForeignKey("shows.id"), index=True, nullable=True)
+    title = Column(String, nullable=True)  # denormalized from Show for display / legacy
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
 
     user = relationship("User", back_populates="watchlist_items")
+    show = relationship("Show", back_populates="watchlist_items")
 
 
 class Show(Base):
@@ -47,3 +49,5 @@ class Show(Base):
     embedding = Column(Vector(384), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    watchlist_items = relationship("WatchlistItem", back_populates="show")

@@ -282,6 +282,7 @@ def _convert_show_row(row: Show) -> dict:
     genres = _coerce_genres(row.genres)
 
     return {
+        "id": row.id,
         "tmdb_id": row.tmdb_id,
         "title": row.title,
         "recommendation_reason": None,
@@ -872,6 +873,7 @@ def recommend_shows(
         else:
             db_first_air_date_str = db_first_air_date
         return RecommendationOutput(
+            id=show.get("id"),
             title=show["title"],
             recommendation_reason=recommendation_reason,
             genres=_coerce_genres(show.get("genres", [])),
@@ -976,6 +978,7 @@ def recommend_shows(
                 db_first_air_date_str = db_first_air_date
             outputs.append(
                 RecommendationOutput(
+                    id=show.get("id"),
                     title=show["title"],
                     recommendation_reason="Family-friendly pick.",
                     genres=_coerce_genres(show.get("genres", [])),
