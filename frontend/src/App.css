@@ -621,6 +621,17 @@ body {
   cursor: pointer;
 }
 
+.auth-modal-message {
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 6px;
+  color: #c7d2fe;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .modal-tabs {
   display: flex;
   gap: 0.5rem;

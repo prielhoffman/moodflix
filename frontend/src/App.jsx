@@ -32,6 +32,7 @@ function App() {
   const [authUser, setAuthUser] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState("login"); // "login" | "register"
+  const [authContextMessage, setAuthContextMessage] = useState(null); // e.g. why modal was opened (watchlist)
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState(null);
@@ -140,22 +141,25 @@ function App() {
     const msg = String(err?.message || "");
 
     if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
-      setError("Please log in to save to watchlist.");
+      setAuthContextMessage("Please log in or register to save to your watchlist.");
+      openAuthModal("login");
       return;
     }
 
     setError("Could not update watchlist. Please try again.");
   }
 
-  function openAuthModal(tab) {
+  function openAuthModal(tab, contextMessage = null) {
     setAuthTab(tab || "login");
     setAuthError(null);
+    setAuthContextMessage(contextMessage ?? null);
     setAuthOpen(true);
   }
 
   function closeAuthModal() {
     setAuthOpen(false);
     setAuthError(null);
+    setAuthContextMessage(null);
     setAuthLoading(false);
     setAuthEmail("");
     setAuthPassword("");
@@ -219,8 +223,7 @@ function App() {
     if (savingTitle) return;
 
     if (!hasAccessToken()) {
-      setError("Please log in to save to watchlist.");
-      openAuthModal("login");
+      openAuthModal("login", "Please log in or register to save to your watchlist.");
       return;
     }
 
@@ -274,6 +277,7 @@ function App() {
         password={authPassword}
         error={authError}
         loading={authLoading}
+        message={authContextMessage}
         onClose={closeAuthModal}
         onTabChange={(tab) => {
           setAuthTab(tab);

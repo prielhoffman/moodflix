@@ -5,6 +5,7 @@ function AuthModal({
   password,
   error,
   loading,
+  message,
   onClose,
   onTabChange,
   onEmailChange,
@@ -22,6 +23,12 @@ function AuthModal({
             ✕
           </button>
         </div>
+
+        {message && (
+          <p className="auth-modal-message" role="alert">
+            {message}
+          </p>
+        )}
 
         <div className="modal-tabs">
           <button
