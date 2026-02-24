@@ -2,7 +2,7 @@
 
 MoodFlix is a full‑stack project that recommends **TV shows** based on a user’s **mood** and **watching preferences**. It also supports **accounts + per‑user watchlists**, and can optionally enrich recommendations with **TMDB metadata**.
 
-There is also an optional AI layer: you can generate **local embeddings** for shows and store them in **pgvector** (to enable semantic search and vector ranking later).
+An **AI layer** provides **local embeddings** (sentence-transformers) stored in **pgvector** for semantic search and vector-based similarity in recommendations.
 
 ---
 
@@ -13,6 +13,7 @@ There is also an optional AI layer: you can generate **local embeddings** for sh
 - **Frontend**: React + Vite
 - **Auth**: JWT (Bearer tokens)
 - **AI**: Local embeddings (sentence-transformers) + pgvector storage
+- **Infrastructure**: Alembic for schema migrations; pgvector extension auto-initialized on first DB connection (`app/db.py`)
 
 ---
 
@@ -26,18 +27,59 @@ There is also an optional AI layer: you can generate **local embeddings** for sh
   - Includes short **explanations** (“why this was recommended”)
 - **Watchlist (per user)**
   - `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required)
+  - Watchlist items reference the `shows` table via `show_id` (FK); add/remove by `show_id` (title supported for legacy/remove)
 - **DB‑backed shows**
   - Recommendations prefer the `shows` table in Postgres (fallback to `app/data.py` if DB is empty)
+  - `shows` stores TMDB metadata (content_rating, number_of_seasons, average_episode_length, original_language) for faster reads and fewer API calls
 - **TMDB enrichment (optional, best‑effort)**
   - Posters/ratings/overviews/dates are fetched from TMDB when `TMDB_API_KEY` is set
-  - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields become `null`)
+  - Fetched metadata is persisted to the DB (write-through) so future requests use local data first
+  - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields fall back to DB or `null`)
 - **Semantic search**
-  - `POST /search/semantic` performs pgvector cosine search over embeddings
+  - `POST /search/semantic` performs pgvector cosine search over embeddings (HNSW index for performance)
   - `POST /search/more-like-this` returns similar shows by `show_id`
 - **Embeddings generation (batch script)**
   - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
 - **Graceful handling of missing API keys**
   - Server starts without `TMDB_API_KEY`
+
+---
+
+## 📐 Recent Improvements & Architecture
+
+### Database Schema Evolution
+
+- **Watchlist refactor**  
+  The watchlist now uses a **foreign key to the `shows` table** (`show_id`) instead of storing only a title string. This ensures a stable link to the catalog, avoids duplicates by show, and allows the API to accept `show_id` for add/remove (with optional title for backward compatibility). The `title` column is kept as an optional denormalized field for display.
+
+- **Shows table expansion**  
+  The `shows` table has been extended with TMDB-derived metadata columns: **`content_rating`**, **`average_episode_length`**, **`number_of_seasons`**, and **`original_language`**. These are populated by the write-through enrichment flow so recommendations and filtering can read from the database first and reduce dependency on the TMDB API.
+
+### Search Optimization
+
+- **Semantic search performance**  
+  Vector similarity search uses an **HNSW index** on `shows.embedding` with **`vector_cosine_ops`** (pgvector). This avoids full table scans on `ORDER BY embedding <=> query_vector` and reduces latency for:
+  - `POST /search/semantic` (natural-language search)
+  - `POST /search/more-like-this` (similar shows by `show_id`)
+  - Semantic candidate retrieval inside the recommendation pipeline when a `query` is provided.
+
+### Data Enrichment Strategy
+
+- **Write-through cache / persistence**  
+  When TMDB is used to enrich a show (e.g. content rating, seasons, episode length, language), the app **persists that data to the local `shows` table** after each fetch. Subsequent requests for the same show read these fields from the database first; TMDB is only called when data is missing or when additional fields (e.g. poster, overview) are needed. This reduces API latency and external dependency while keeping the catalog up to date as enrichment runs.
+
+### Infrastructure
+
+- **pgvector extension**  
+  The **pgvector** extension is ensured on every new database connection via a pool listener in `app/db.py`. The app can rely on vector support without depending on a one-off migration or manual setup.
+
+- **Migrations**  
+  **Alembic** is used for all schema changes (watchlist `show_id`, shows metadata columns, HNSW index, etc.). Run `alembic upgrade head` after pulling or when deploying.
+
+### Bug Fixes & Safety
+
+- **Kids / family filtering**  
+  Filtering logic for family and kids contexts has been tightened. A **title blacklist** (`_KIDS_TITLE_BLACKLIST`) blocks known adult-oriented titles in kids/family mode, in addition to genre-based and keyword-based rules, improving safety for age-restricted use cases.
 
 ---
 
@@ -74,6 +116,7 @@ From the repo root:
 
 ```bash
 docker compose up -d db
+alembic upgrade head
 ```
 
 ### 2) Backend setup & run
@@ -225,8 +268,6 @@ The script:
 
 ## 🗺️ Roadmap / Planned Features
 
-- **Semantic search** over shows using embeddings
-- **Vector ranking** (pgvector similarity search) combined with existing scoring
 - **Personalization** via watch history and explicit feedback (“helped / didn’t help”)
 - **Production hardening**
   - config cleanup, logging, safer secrets handling, better error reporting
