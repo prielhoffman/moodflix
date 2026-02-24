@@ -65,6 +65,21 @@ _KIDS_KEYWORD_BLOCKLIST = {
     "blood", "terrorist", "drug",
 }
 
+# Title substrings that indicate shows to block in Kids/Family context (case-insensitive).
+_KIDS_TITLE_BLACKLIST = {
+    "law & order",
+    "grey's anatomy",
+    "grey anatomy",
+    "csi:",
+    "criminal minds",
+    "ncis",
+    "svu",
+    "the walking dead",
+    "game of thrones",
+    "breaking bad",
+    "squid game",
+}
+
 
 # Kids/Family safety: show must have at least one of these genre IDs (or pass exception rule).
 _KIDS_SAFE_GENRE_IDS = {10751, 10762, 16}  # Family, Kids, Animation
@@ -288,14 +303,11 @@ def _convert_show_row(row: Show) -> dict:
         "recommendation_reason": None,
         "genres": genres,
         "short_summary": _build_short_summary(row.overview),
-        # These fields don't exist in the current DB schema yet;
-        # keep them as None so filters can treat them as "unknown".
-        "content_rating": None,
-        "average_episode_length": None,
-        "number_of_seasons": None,
+        "content_rating": getattr(row, "content_rating", None),
+        "average_episode_length": getattr(row, "average_episode_length", None),
+        "number_of_seasons": getattr(row, "number_of_seasons", None),
         "language": getattr(row, "original_language", None),
         "original_language": getattr(row, "original_language", None),
-        # Optional fields we can use as a fallback when TMDB enrichment is unavailable.
         "poster_url": row.poster_url,
         "popularity": row.popularity,
         "vote_count": row.vote_count,
@@ -308,6 +320,40 @@ def _convert_show_row(row: Show) -> dict:
 
 def _load_shows_from_rows(rows: list[Show]) -> list[dict]:
     return [_convert_show_row(row) for row in rows]
+
+
+def _persist_tmdb_to_show(db: Optional[Session], show_id: Optional[int], tmdb_data: dict) -> None:
+    """
+    Write-through: persist TMDB metadata to the shows table so future requests
+    can read from DB instead of calling the API. Updates fields when tmdb_data
+    has values (so DB stays in sync with the last TMDB fetch).
+    """
+    if db is None or show_id is None or not tmdb_data:
+        return
+    row = db.query(Show).filter(Show.id == show_id).first()
+    if row is None:
+        return
+    updated = False
+    if tmdb_data.get("content_rating") is not None:
+        val = (tmdb_data["content_rating"] or "").strip() or None
+        if row.content_rating != val:
+            row.content_rating = val
+            updated = True
+    if tmdb_data.get("average_episode_length") is not None:
+        if row.average_episode_length != tmdb_data["average_episode_length"]:
+            row.average_episode_length = tmdb_data["average_episode_length"]
+            updated = True
+    if tmdb_data.get("number_of_seasons") is not None:
+        if row.number_of_seasons != tmdb_data["number_of_seasons"]:
+            row.number_of_seasons = tmdb_data["number_of_seasons"]
+            updated = True
+    if tmdb_data.get("original_language") is not None:
+        val = (tmdb_data["original_language"] or "").strip() or None
+        if row.original_language != val:
+            row.original_language = val
+            updated = True
+    if updated:
+        db.commit()
 
 
 def _load_shows_from_db(db: Session) -> list[dict]:
@@ -799,17 +845,22 @@ def recommend_shows(
             network_fetches,
         )
 
+    # Write-through: persist TMDB metadata to DB so future requests read locally
+    for item, tmdb_data in zip(top_scored, tmdb_enriched):
+        if tmdb_data and item["show"].get("id"):
+            _persist_tmdb_to_show(db, item["show"]["id"], tmdb_data)
+
     outputs: list[RecommendationOutput] = []
 
     def _resolved_seasons_and_episode_length(show: dict, tmdb_data: dict | None) -> tuple[int | None, int | None]:
-        """Prefer TMDB enriched data so post-enrichment filters use real values."""
+        """Use DB first, then TMDB fallback (write-through: DB may already have persisted data)."""
         td = tmdb_data or {}
-        seasons = td.get("number_of_seasons")
+        seasons = show.get("number_of_seasons")
         if seasons is None:
-            seasons = show.get("number_of_seasons")
-        ep_len = td.get("average_episode_length")
+            seasons = td.get("number_of_seasons")
+        ep_len = show.get("average_episode_length")
         if ep_len is None:
-            ep_len = show.get("average_episode_length")
+            ep_len = td.get("average_episode_length")
         return seasons, ep_len
 
     def _apply_post_enrichment_binge_episode_filters(
@@ -833,10 +884,11 @@ def recommend_shows(
 
     def _build_output(item: dict, tmdb_data: dict | None, show: dict) -> RecommendationOutput | None:
         """Build one RecommendationOutput from item + tmdb_data; apply filters; return None if dropped."""
+        # Prefer DB (show), then TMDB fallback
         resolved_rating = _normalize_content_rating(
-            (tmdb_data or {}).get("content_rating") or show.get("content_rating")
+            show.get("content_rating") or (tmdb_data or {}).get("content_rating")
         )
-        if resolved_rating and (tmdb_data or {}).get("content_rating"):
+        if resolved_rating:
             show["content_rating"] = resolved_rating
         title = show.get("title") or "Unknown"
         if zero_trust_rating:
@@ -922,6 +974,8 @@ def recommend_shows(
             show.get("title"),
             tmdb_id=show.get("tmdb_id"),
         )
+        if tmdb_data and show.get("id"):
+            _persist_tmdb_to_show(db, show["id"], tmdb_data)
         out = _build_output(item, tmdb_data, show)
         if out is not None:
             outputs.append(out)
@@ -961,6 +1015,8 @@ def recommend_shows(
         need = int(top_n) - len(outputs)
         for show in family_only[:need]:
             tmdb_data = get_tv_details_cached(show.get("title"), tmdb_id=show.get("tmdb_id"))
+            if tmdb_data and show.get("id"):
+                _persist_tmdb_to_show(db, show["id"], tmdb_data)
             resolved_rating = _normalize_content_rating(
                 (tmdb_data or {}).get("content_rating") or show.get("content_rating")
             ) or _default_rating_for_trusted_show(show)

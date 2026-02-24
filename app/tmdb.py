@@ -136,9 +136,15 @@ def _fetch_tv_details_uncached(tmdb_id: int) -> dict | None:
         valid = [int(x) for x in run_times if isinstance(x, (int, float)) and x > 0]
         if valid:
             average_episode_length = int(round(sum(valid) / len(valid)))
+    original_language = data.get("original_language")
+    if original_language is not None and not isinstance(original_language, str):
+        original_language = None
+    elif original_language:
+        original_language = original_language.strip() or None
     return {
         "number_of_seasons": number_of_seasons,
         "average_episode_length": average_episode_length,
+        "original_language": original_language,
     }
 
 
@@ -179,12 +185,14 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
     content_rating = None
     number_of_seasons = None
     average_episode_length = None
+    original_language = None
     if isinstance(tmdb_id, int):
         content_rating = _fetch_tv_content_ratings_uncached(tmdb_id)
         details = _fetch_tv_details_uncached(tmdb_id)
         if details:
             number_of_seasons = details.get("number_of_seasons")
             average_episode_length = details.get("average_episode_length")
+            original_language = details.get("original_language")
     return {
         "tmdb_id": tmdb_id,
         "poster_url": (
@@ -198,6 +206,7 @@ def _search_tv_show_uncached(title: str, *, year: int | str | None = None) -> di
         "content_rating": content_rating,
         "number_of_seasons": number_of_seasons,
         "average_episode_length": average_episode_length,
+        "original_language": original_language,
     }
 
 

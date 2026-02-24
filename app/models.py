@@ -45,6 +45,12 @@ class Show(Base):
     vote_count = Column(Integer, nullable=True)
     first_air_date = Column(Date, nullable=True)
 
+    # TMDB metadata (persisted for write-through; fallback to API when null)
+    content_rating = Column(String, nullable=True)
+    average_episode_length = Column(Integer, nullable=True)
+    number_of_seasons = Column(Integer, nullable=True)
+    original_language = Column(String, nullable=True)
+
     # Vector embedding for semantic search / recommendations (MiniLM 384 dims)
     embedding = Column(Vector(384), nullable=True)
 
