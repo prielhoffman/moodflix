@@ -51,6 +51,20 @@ DATABASE_URL = _build_database_url()
 
 engine = create_engine(DATABASE_URL, echo=True)
 
+
+def _ensure_vector_extension(dbapi_connection, connection_record):
+    """Ensure pgvector extension exists (for semantic search). Idempotent."""
+    cur = dbapi_connection.cursor()
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    finally:
+        cur.close()
+
+
+from sqlalchemy import event
+
+event.listen(engine.pool, "connect", _ensure_vector_extension)
+
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
