@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -8,6 +9,7 @@ from app.db import get_db
 from app.models import User
 from app.routers import auth
 from app.security import create_access_token
+from app.exceptions import AppException
 
 
 def _make_test_client() -> TestClient:
@@ -22,6 +24,14 @@ def _make_test_client() -> TestClient:
     User.__table__.create(bind=engine, checkfirst=True)
 
     app = FastAPI()
+
+    @app.exception_handler(AppException)
+    def handle_app_exception(_request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_response().model_dump(),
+        )
+
     app.include_router(auth.router)
 
     def override_get_db():
@@ -35,10 +45,21 @@ def _make_test_client() -> TestClient:
     return TestClient(app)
 
 
-def _register(client: TestClient, email: str, password: str = "secret123"):
+def _register(
+    client: TestClient,
+    email: str,
+    password: str = "secret123",
+    full_name: str = "Test User",
+    date_of_birth: str = "1990-01-15",
+):
     return client.post(
         "/auth/register",
-        json={"email": email, "password": password},
+        json={
+            "full_name": full_name,
+            "date_of_birth": date_of_birth,
+            "email": email,
+            "password": password,
+        },
     )
 
 
@@ -57,8 +78,31 @@ def test_register_success():
     assert res.status_code == 200
     data = res.json()
     assert data["email"] == "user1@example.com"
+    assert data["full_name"] == "Test User"
+    assert data["date_of_birth"] == "1990-01-15"
     assert "id" in data
     assert "created_at" in data
+
+
+def test_register_rejects_date_of_birth_under_13():
+    client = _make_test_client()
+
+    # Use a date that would make user 12 years old today
+    from datetime import date
+    today = date.today()
+    dob_12_years_ago = today.replace(year=today.year - 12)
+
+    res = client.post(
+        "/auth/register",
+        json={
+            "full_name": "Young User",
+            "date_of_birth": dob_12_years_ago.isoformat(),
+            "email": "young@example.com",
+            "password": "secret123",
+        },
+    )
+
+    assert res.status_code == 422
 
 
 def test_register_duplicate_email_rejected():

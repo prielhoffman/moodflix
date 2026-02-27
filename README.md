@@ -76,6 +76,14 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
 - **Migrations**  
   **Alembic** is used for all schema changes (watchlist `show_id`, shows metadata columns, HNSW index, etc.). Run `alembic upgrade head` after pulling or when deploying.
 
+### User Registration & Age-Based Recommendations
+
+- **Registration fields**  
+  Users now provide **full_name**, **date_of_birth**, **email**, and **password** when registering. `date_of_birth` is validated (must be in the past; age 13–120).
+
+- **Recommendations without age input**  
+  The recommendations form no longer asks for age. For **authenticated** users, age is inferred from `date_of_birth` and used for content filtering. For **unauthenticated** users, age filtering is skipped (treated as adult).
+
 ### Bug Fixes & Safety
 
 - **Kids / family filtering**  
@@ -143,6 +151,22 @@ npm run dev
 
 Frontend URL:
 - `http://localhost:5173`
+
+### 4) Run migrations (full_name + date_of_birth)
+
+After pulling the latest changes, run:
+
+```bash
+alembic upgrade head
+```
+
+This adds `full_name` and `date_of_birth` to the `users` table. Existing users are backfilled with defaults (email prefix as full_name, `1990-01-01` as date_of_birth).
+
+**Verify the new flow:**
+1. Register a new user with full name, date of birth, email, and password.
+2. Log in and open the recommendations page — the form no longer asks for age.
+3. Get recommendations (age is inferred from your date of birth for content filtering).
+4. Log out and get recommendations — they work without age filtering (treated as adult).
 
 ---
 

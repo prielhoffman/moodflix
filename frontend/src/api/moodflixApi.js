@@ -159,16 +159,23 @@ async function tryPaths(paths, options) {
 
 /* ================= AUTH ================= */
 
-export async function register(email, password) {
-  if (!email || !password) throw new Error("register: missing email/password");
+export async function register(fullName, dateOfBirth, email, password) {
+  if (!fullName?.trim() || !dateOfBirth || !email || !password) {
+    throw new Error("register: missing full_name, date_of_birth, email, or password");
+  }
 
-  // Backend expects { email, password }
+  // Backend expects { full_name, date_of_birth, email, password }
   const data = await requestJson("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      full_name: fullName.trim(),
+      date_of_birth: dateOfBirth,
+      email,
+      password,
+    }),
   });
 
-  return data; // { id, email, created_at }
+  return data; // { id, full_name, email, date_of_birth, created_at }
 }
 
 export async function login(email, password) {

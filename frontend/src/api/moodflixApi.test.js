@@ -27,7 +27,7 @@ describe("moodflixApi", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]));
     vi.stubGlobal("fetch", fetchMock);
 
-    const payload = { age: 25, mood: "chill", binge_preference: "binge" };
+    const payload = { mood: "chill", binge_preference: "binge" };
     await recommendShows(payload);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

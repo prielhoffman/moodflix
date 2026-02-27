@@ -1,6 +1,8 @@
 function AuthModal({
   open,
   tab,
+  fullName,
+  dateOfBirth,
   email,
   password,
   error,
@@ -8,6 +10,8 @@ function AuthModal({
   message,
   onClose,
   onTabChange,
+  onFullNameChange,
+  onDateOfBirthChange,
   onEmailChange,
   onPasswordChange,
   onSubmit,
@@ -46,6 +50,35 @@ function AuthModal({
         </div>
 
         <form className="auth-form" onSubmit={onSubmit}>
+          {tab === "register" && (
+            <>
+              <div className="form-group">
+                <label htmlFor="authFullName">Full name</label>
+                <input
+                  id="authFullName"
+                  type="text"
+                  required
+                  minLength={1}
+                  maxLength={255}
+                  placeholder="Your full name"
+                  value={fullName}
+                  onChange={(e) => onFullNameChange(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="authDateOfBirth">Date of birth</label>
+                <input
+                  id="authDateOfBirth"
+                  type="date"
+                  required
+                  value={dateOfBirth}
+                  onChange={(e) => onDateOfBirthChange(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
           <div className="form-group">
             <label htmlFor="authEmail">Email</label>
             <input
@@ -63,6 +96,7 @@ function AuthModal({
               id="authPassword"
               type="password"
               required
+              minLength={1}
               value={password}
               onChange={(e) => onPasswordChange(e.target.value)}
             />

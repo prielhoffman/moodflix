@@ -446,11 +446,15 @@ def recommend_shows(
     user_input: RecommendationInput,
     *,
     db: Optional[Session] = None,
+    age: Optional[int] = None,
     top_n: Optional[int] = None,
     candidate_top_k: Optional[int] = None,
 ) -> List[RecommendationOutput]:
     """
     Recommend shows based on user input.
+
+    Age is inferred from authenticated user's date_of_birth when available.
+    When age is None (unauthenticated), defaults to 18 (adult) so age filtering is skipped.
 
     Data source priority:
     1) Postgres `shows` table (if db provided and has rows)
@@ -460,6 +464,9 @@ def recommend_shows(
         top_n = config.DEFAULT_TOP_N
     if candidate_top_k is None:
         candidate_top_k = config.DEFAULT_CANDIDATE_TOP_K
+
+    # Unauthenticated: use 18 (adult) so we don't restrict content by age.
+    user_age = age if age is not None else 18
 
     shows: list[dict] = []
 
@@ -486,10 +493,10 @@ def recommend_shows(
     kids_intent = _requests_kids_content(user_input)
     # Family context and age-based flags before building user_genres.
     is_family_context = user_input.watching_context == WatchingContext.FAMILY
-    effective_max_age = config.FAMILY_CONTEXT_EFFECTIVE_AGE if is_family_context else user_input.age
+    effective_max_age = config.FAMILY_CONTEXT_EFFECTIVE_AGE if is_family_context else user_age
     is_kids_or_family = effective_max_age < config.KIDS_CUTOFF_AGE or is_family_context
     # Zero-trust: require explicit family-safe rating when age < 18 or Kids/Family context.
-    zero_trust_rating = (user_input.age < 18) or is_family_context or kids_intent
+    zero_trust_rating = (user_age < 18) or is_family_context or kids_intent
 
     # Auto-genre injection: ensure kids/family when under 13 or Family context.
     user_genres = {g.lower() for g in user_input.preferred_genres if g and g.strip()}
@@ -544,7 +551,7 @@ def recommend_shows(
         # Family context: exclude crime, horror, thriller, true crime, war (by name).
         if is_family_context and (show_genres & _FAMILY_UNSAFE_GENRES):
             continue
-        if user_input.age >= config.EXCLUDE_KIDS_GENRE_MIN_AGE and not kids_intent:
+        if user_age >= config.EXCLUDE_KIDS_GENRE_MIN_AGE and not kids_intent:
             if show_genres & _KIDS_GENRES:
                 continue
 

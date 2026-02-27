@@ -1,3 +1,4 @@
+from datetime import date
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field, EmailStr, model_validator
@@ -32,8 +33,6 @@ class WatchingContext(str, Enum):
 
 
 class RecommendationInput(BaseModel):
-    age: int = Field(..., ge=0, le=120, description="User age between 0-120")
-
     binge_preference: BingePreference = Field(
         BingePreference.BINGE,
         description="Whether the user prefers binge-worthy or single-season shows",
@@ -174,9 +173,31 @@ from pydantic import EmailStr
 from datetime import datetime
 
 
+def _validate_date_of_birth(v: date) -> date:
+    """Validate date_of_birth is in the past and age is 13-120."""
+    today = date.today()
+    if v >= today:
+        raise ValueError("date_of_birth must be in the past")
+    age = today.year - v.year
+    if (today.month, today.day) < (v.month, v.day):
+        age -= 1
+    if age < 13:
+        raise ValueError("User must be at least 13 years old")
+    if age > 120:
+        raise ValueError("Invalid date of birth")
+    return v
+
+
 class UserCreate(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=255, description="User's full name")
+    date_of_birth: date = Field(..., description="User's date of birth (age 13-120)")
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_dob(self):
+        _validate_date_of_birth(self.date_of_birth)
+        return self
 
 
 class UserLogin(BaseModel):
@@ -186,11 +207,12 @@ class UserLogin(BaseModel):
 
 class UserPublic(BaseModel):
     id: int
+    full_name: str
     email: EmailStr
+    date_of_birth: date
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class Token(BaseModel):

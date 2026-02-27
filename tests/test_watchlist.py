@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -7,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.db import get_db
 from app.models import User, WatchlistItem, Show
 from app.routers import auth, watchlist
+from app.exceptions import AppException
 
 
 def _make_test_client():
@@ -23,6 +25,14 @@ def _make_test_client():
     WatchlistItem.__table__.create(bind=engine, checkfirst=True)
 
     app = FastAPI()
+
+    @app.exception_handler(AppException)
+    def handle_app_exception(_request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_response().model_dump(),
+        )
+
     app.include_router(auth.router)
     app.include_router(watchlist.router)
 
@@ -38,8 +48,22 @@ def _make_test_client():
     return client, TestingSessionLocal
 
 
-def _register(client: TestClient, email: str, password: str = "secret123"):
-    return client.post("/auth/register", json={"email": email, "password": password})
+def _register(
+    client: TestClient,
+    email: str,
+    password: str = "secret123",
+    full_name: str = "Test User",
+    date_of_birth: str = "1990-01-15",
+):
+    return client.post(
+        "/auth/register",
+        json={
+            "full_name": full_name,
+            "date_of_birth": date_of_birth,
+            "email": email,
+            "password": password,
+        },
+    )
 
 
 def _login(client: TestClient, email: str, password: str = "secret123") -> str:

@@ -33,6 +33,8 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState("login"); // "login" | "register"
   const [authContextMessage, setAuthContextMessage] = useState(null); // e.g. why modal was opened (watchlist)
+  const [authFullName, setAuthFullName] = useState("");
+  const [authDateOfBirth, setAuthDateOfBirth] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState(null);
@@ -161,6 +163,8 @@ function App() {
     setAuthError(null);
     setAuthContextMessage(null);
     setAuthLoading(false);
+    setAuthFullName("");
+    setAuthDateOfBirth("");
     setAuthEmail("");
     setAuthPassword("");
   }
@@ -173,7 +177,25 @@ function App() {
 
     try {
       if (authTab === "register") {
-        await register(authEmail, authPassword);
+        // Client-side validation: user must be at least 13
+        const dob = new Date(authDateOfBirth);
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+          age--;
+        }
+        if (age < 13) {
+          setAuthError("You must be at least 13 years old to register.");
+          setAuthLoading(false);
+          return;
+        }
+        if (dob >= today) {
+          setAuthError("Date of birth must be in the past.");
+          setAuthLoading(false);
+          return;
+        }
+        await register(authFullName, authDateOfBirth, authEmail, authPassword);
       }
 
       await login(authEmail, authPassword);
@@ -273,6 +295,8 @@ function App() {
       <AuthModal
         open={authOpen}
         tab={authTab}
+        fullName={authFullName}
+        dateOfBirth={authDateOfBirth}
         email={authEmail}
         password={authPassword}
         error={authError}
@@ -283,6 +307,8 @@ function App() {
           setAuthTab(tab);
           setAuthError(null);
         }}
+        onFullNameChange={setAuthFullName}
+        onDateOfBirthChange={setAuthDateOfBirth}
         onEmailChange={setAuthEmail}
         onPasswordChange={setAuthPassword}
         onSubmit={handleAuthSubmit}
@@ -290,7 +316,9 @@ function App() {
 
       <UserInfoModal
         open={userInfoOpen}
+        fullName={authUser?.full_name}
         email={authUser?.email}
+        dateOfBirth={authUser?.date_of_birth}
         onClose={() => setUserInfoOpen(false)}
       />
 

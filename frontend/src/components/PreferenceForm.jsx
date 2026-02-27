@@ -36,9 +36,8 @@ const LANGUAGE_OPTIONS = [
   and sends them to the parent component via onSubmit.
 */
 function PreferenceForm({ onSubmit }) {
-  // Form state: matches backend field names exactly
+  // Form state: matches backend field names exactly (age removed - inferred from user's date_of_birth when authenticated)
   const [formData, setFormData] = useState({
-    age: "",
     mood: "chill",
     binge_preference: "binge",
     preferred_genres: [],
@@ -55,23 +54,6 @@ function PreferenceForm({ onSubmit }) {
       ...prevData,
       [name]: value,
     }));
-  }
-
-  // Age: block non-digits at key level to avoid flicker; allow digits, Backspace, Tab, Delete, arrows
-  function handleAgeKeyDown(event) {
-    const { key } = event;
-    if (event.ctrlKey || event.metaKey) return; // allow Ctrl/Cmd+A, C, V, X
-    if (key === "Backspace" || key === "Tab" || key === "Delete" || key === "ArrowLeft" || key === "ArrowRight" || key === "Home" || key === "End") return;
-    if (/^\d$/.test(key)) return;
-    event.preventDefault();
-  }
-
-  // Age: only update state if value is empty or in range 0–120 (catches paste)
-  function handleAgeChange(event) {
-    const val = event.target.value;
-    if (val === "" || (/^\d+$/.test(val) && Number(val) >= 0 && Number(val) <= 120)) {
-      setFormData((prev) => ({ ...prev, age: val }));
-    }
   }
 
   function handleGenreToggle(genre) {
@@ -92,12 +74,8 @@ function PreferenceForm({ onSubmit }) {
   function handleSubmit(event) {
     event.preventDefault();
 
-    // Prepare data for backend:
-    // convert age from string to number
-    const preparedData = {
-      ...formData,
-      age: Number(formData.age),
-    };
+    // Prepare data for backend (no age - inferred from user's date_of_birth when authenticated)
+    const preparedData = { ...formData };
 
     if (!preparedData.language_preference) {
       delete preparedData.language_preference;
@@ -133,23 +111,6 @@ function PreferenceForm({ onSubmit }) {
           <option value="dark">Dark</option>
           <option value="curious">Curious</option>
         </select>
-      </div>
-
-      {/* Age input */}
-      <div className="form-group">
-        <label htmlFor="age">Age</label>
-
-        <input
-          type="number"
-          id="age"
-          name="age"
-          min="0"
-          max="120"
-          required
-          value={formData.age}
-          onKeyDown={handleAgeKeyDown}
-          onChange={handleAgeChange}
-        />
       </div>
 
       {/* Binge preference */}

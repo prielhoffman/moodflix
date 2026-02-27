@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from app.db import get_db
+from app.dependencies import get_current_user_optional
+from app.utils import compute_age
 from app.routers import auth, watchlist
 from app.routers import search
 from app.schemas import RecommendationInput, RecommendationOutput
@@ -95,12 +97,19 @@ def db_health(db: Session = Depends(get_db)):
 # -------------------- Recommendations --------------------
 
 @app.post("/recommend", response_model=List[RecommendationOutput])
-def recommend(input_data: RecommendationInput, db: Session = Depends(get_db)):
+def recommend(
+    input_data: RecommendationInput,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
     """
     Receive user preferences and return TV show recommendations.
+    When authenticated, age is inferred from the user's date_of_birth for content filtering.
+    When unauthenticated, age filtering is skipped (treated as adult).
     """
+    age = compute_age(current_user.date_of_birth) if current_user else None
     try:
-        return recommend_shows(input_data, db=db)
+        return recommend_shows(input_data, db=db, age=age)
     except AppException:
         raise
     except Exception as e:

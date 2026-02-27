@@ -3,20 +3,26 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AuthModal from "./AuthModal";
 
-function AuthModalHarness({ onSubmit = vi.fn(), loading = false }) {
+function AuthModalHarness({ onSubmit = vi.fn(), loading = false, tab = "login" }) {
+  const [fullName, setFullName] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   return (
     <AuthModal
       open
-      tab="login"
+      tab={tab}
+      fullName={fullName}
+      dateOfBirth={dateOfBirth}
       email={email}
       password={password}
       error={null}
       loading={loading}
       onClose={vi.fn()}
       onTabChange={vi.fn()}
+      onFullNameChange={setFullName}
+      onDateOfBirthChange={setDateOfBirth}
       onEmailChange={setEmail}
       onPasswordChange={setPassword}
       onSubmit={onSubmit}
