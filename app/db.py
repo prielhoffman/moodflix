@@ -10,9 +10,11 @@ _REQUIRED_POSTGRES_ENV_VARS = (
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "POSTGRES_DB",
-    "POSTGRES_HOST",
-    "POSTGRES_PORT",
 )
+
+# Defaults: use localhost for local development; in Docker set POSTGRES_HOST=db in compose.
+_POSTGRES_HOST_DEFAULT = "localhost"
+_POSTGRES_PORT_DEFAULT = "5432"
 
 
 def _build_database_url() -> str:
@@ -37,13 +39,17 @@ def _build_database_url() -> str:
         raise RuntimeError(
             "Database configuration is incomplete.\n"
             f"Missing required environment variables: {missing_vars}\n"
-            f"Set DATABASE_URL or define all POSTGRES_* variables: {required_vars}\n"
+            f"Set DATABASE_URL or define {required_vars}. "
+            "POSTGRES_HOST defaults to localhost; use 'db' when running in Docker.\n"
             "Tip: copy .env.example to .env and fill in the values."
         )
 
+    host = (os.getenv("POSTGRES_HOST") or "").strip() or _POSTGRES_HOST_DEFAULT
+    port = (os.getenv("POSTGRES_PORT") or "").strip() or _POSTGRES_PORT_DEFAULT
+
     return (
         f"postgresql://{values['POSTGRES_USER']}:{values['POSTGRES_PASSWORD']}"
-        f"@{values['POSTGRES_HOST']}:{values['POSTGRES_PORT']}/{values['POSTGRES_DB']}"
+        f"@{host}:{port}/{values['POSTGRES_DB']}"
     )
 
 
