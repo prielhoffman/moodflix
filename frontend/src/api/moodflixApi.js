@@ -130,7 +130,18 @@ async function requestJson(path, options = {}) {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} on ${path}: ${text}`);
+    try {
+      const body = JSON.parse(text);
+      if (body?.message && typeof body.message === "string") {
+        throw new Error(body.message);
+      }
+    } catch (parseErr) {
+      if (parseErr instanceof SyntaxError) {
+        throw new Error(`Request failed: ${text || res.statusText || "Unknown error"}`);
+      }
+      throw parseErr;
+    }
+    throw new Error(`Request failed: ${text || res.statusText || "Unknown error"}`);
   }
 
   const contentType = res.headers.get("content-type") || "";

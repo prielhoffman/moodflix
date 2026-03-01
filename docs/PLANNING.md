@@ -61,14 +61,44 @@
 
 ---
 
-### 4. Recommended Next Steps (For Later Planning)
+### 4. Roadmap (MVP / V2 / V3)
+
+#### MVP (Job-Ready)
+
+- **Auth + Profile:** Registration/Login (JWT) with full_name, date_of_birth, email, password
+- **Recommendations (Mood + Constraints):** Input form + engine returning Top N shows
+- **Explainability:** Each recommendation includes a short "Why this?" (1–2 reasons)
+- **Watchlist:** Save from results, view watchlist, remove items
+- **Semantic Search:** Free-text search with pgvector (natural-language descriptions)
+- **Stable Data Layer:** PostgreSQL + Alembic + optional TMDB enrichment (write-through cache)
+- **Demo Readiness:** Docker Compose (db + backend + frontend), pytest + Vitest, CI
+
+#### V2 (Nice-to-Have)
+
+- **"More Like This":** Vector similarity recommendations (backend exists; add frontend UI)
+- **User Preferences:** Persistent settings (genres/language/max length) with auto-fill
+- **Feedback:** Simple Like/Dislike for future re-ranking
+- **Recommendation Logs:** Session tracking (input/results/latency)
+- **Systematic CI:** Expanded test coverage + GitHub Actions
+
+#### V3 (Future)
+
+- **Personalized Ranking:** History-based re-ranking
+- **A/B Testing:** Comparing algorithm versions via logs
+- **Advanced Caching:** Redis, rate limiting
+- **Observability:** Metrics, tracing, dashboards
+- **Production Deployment:** Cloud infrastructure (CD, secrets, monitoring)
+
+---
+
+### 5. Recommended Next Steps (For Later Planning)
 
 1. **Step 2** – Define explicit planning steps (e.g. UX flow, API contracts, data model) that reference Step 1.
 2. **Gap review** – When prioritizing work, use the gaps above (1-minute flow, search relevance, setup simplicity) to decide what to tackle first.
 
 ---
 
-### 5. Decision Rule for Future Suggestions
+### 6. Decision Rule for Future Suggestions
 
 When proposing changes:
 

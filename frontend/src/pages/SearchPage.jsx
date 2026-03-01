@@ -46,7 +46,7 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
       setResults(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
-      setError("Search failed. Please try again.");
+      setError(err?.message || "Search failed. Please try again.");
       setResults([]);
     } finally {
       setIsLoading(false);

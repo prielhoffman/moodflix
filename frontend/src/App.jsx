@@ -110,7 +110,7 @@ function App() {
       await loadWatchlist();
     } catch (err) {
       console.error(err);
-      setError("Something went wrong. Try again.");
+      setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
     } finally {
       setIsLoading(false);
     }

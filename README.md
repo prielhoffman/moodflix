@@ -13,6 +13,36 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
 
 ---
 
+## System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Frontend [Frontend]
+        React[React + Vite]
+    end
+
+    subgraph Backend [Backend]
+        FastAPI[FastAPI]
+    end
+
+    subgraph Data [Data Layer]
+        Postgres[(PostgreSQL + pgvector)]
+    end
+
+    subgraph AI [AI Layer]
+        Embed[Embeddings: Sentence Transformers]
+    end
+
+    React -->|REST API| FastAPI
+    FastAPI -->|SQL + vector search| Postgres
+    FastAPI -->|embed query / candidates| Embed
+    Embed -->|vector 384| Postgres
+```
+
+**Flow:** User interacts with the React frontend, which calls the FastAPI backend. The backend queries PostgreSQL (with pgvector for semantic search) and uses local Sentence Transformers for embeddings. Optional TMDB enrichment runs as a write-through cache when configured.
+
+---
+
 ## 🖥️ Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy, Alembic
@@ -38,13 +68,14 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
 - **DB‑backed shows**
   - Recommendations prefer the `shows` table in Postgres (fallback to `app/data.py` if DB is empty)
   - `shows` stores TMDB metadata (content_rating, number_of_seasons, average_episode_length, original_language) for faster reads and fewer API calls
-- **TMDB enrichment (optional, best‑effort)**
-  - Posters/ratings/overviews/dates are fetched from TMDB when `TMDB_API_KEY` is set
-  - Fetched metadata is persisted to the DB (write-through) so future requests use local data first
-  - If TMDB is down/rate‑limited/misconfigured, recommendations still work (TMDB fields fall back to DB or `null`)
-- **Semantic search**
+- **Optional TMDB enrichment (write-through cache)**
+  - When `TMDB_API_KEY` is set, posters/ratings/overviews/dates are fetched from TMDB and **persisted to the DB** (write-through cache)
+  - Subsequent requests read from the local `shows` table first; TMDB is only called when data is missing
+  - If TMDB is down, rate-limited, or misconfigured, recommendations still work (TMDB fields fall back to DB or `null`)
+- **Semantic search (MVP)**
   - `POST /search/semantic` performs pgvector cosine search over embeddings (HNSW index for performance)
-  - `POST /search/more-like-this` returns similar shows by `show_id`
+- **More Like This (V2)**
+  - `POST /search/more-like-this` returns similar shows by `show_id` (backend ready; frontend UI planned for V2)
 - **Embeddings generation (batch script)**
   - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
 - **Graceful handling of missing API keys**
@@ -70,10 +101,9 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
   - `POST /search/more-like-this` (similar shows by `show_id`)
   - Semantic candidate retrieval inside the recommendation pipeline when a `query` is provided.
 
-### Data Enrichment Strategy
+### Optional TMDB Enrichment (Write-Through Cache)
 
-- **Write-through cache / persistence**  
-  When TMDB is used to enrich a show (e.g. content rating, seasons, episode length, language), the app **persists that data to the local `shows` table** after each fetch. Subsequent requests for the same show read these fields from the database first; TMDB is only called when data is missing or when additional fields (e.g. poster, overview) are needed. This reduces API latency and external dependency while keeping the catalog up to date as enrichment runs.
+When TMDB is configured, the app **persists fetched metadata to the local `shows` table** after each enrichment. Subsequent requests read from the database first; TMDB is only called when data is missing. This reduces API latency and external dependency. Recommendations work without TMDB (fallback data or DB-only).
 
 ### Infrastructure
 
@@ -309,6 +339,23 @@ The script:
 
 ---
 
+## Testing
+
+- **Backend:** pytest (auth, recommendations, watchlist, semantic search, TMDB)
+- **Frontend:** Vitest (API client, components)
+
+```bash
+# Backend tests
+pytest
+
+# Frontend tests
+cd frontend && npm test
+```
+
+CI runs both on push/PR to main, master, and develop.
+
+---
+
 ## 📋 Developer Notes
 
 ### Planning
@@ -327,16 +374,7 @@ curl -X POST http://127.0.0.1:8000/recommend ^
 
 ### Run tests
 
-```bash
-pytest
-```
-
-### Run frontend tests
-
-```bash
-cd frontend
-npm test
-```
+See [Testing](#testing) above.
 
 ### Debug endpoint status
 
