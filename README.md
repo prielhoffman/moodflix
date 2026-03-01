@@ -6,6 +6,13 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
 
 ---
 
+## Documentation
+
+- **Planning & design decisions:** [docs/PLANNING.md](docs/PLANNING.md)
+- **Local setup guide (Windows):** [docs/setup.md](docs/setup.md)
+
+---
+
 ## 🖥️ Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy, Alembic
@@ -303,6 +310,10 @@ The script:
 ---
 
 ## 📋 Developer Notes
+
+### Planning
+
+See [docs/PLANNING.md](docs/PLANNING.md) for project goals, success criteria, and decision rules for future changes.
 
 ### Test `/recommend`
 

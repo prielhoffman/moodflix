@@ -1,6 +1,6 @@
 # Windows Setup Guide
 
-This guide provides step-by-step instructions for setting up MoodFlix on Windows using Python 3.12.
+**Local setup and run guide.** Step-by-step instructions for running MoodFlix on Windows: prerequisites, environment variables, and how to run the backend and frontend.
 
 ## Why Python 3.12?
 
