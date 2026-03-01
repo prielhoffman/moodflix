@@ -1,3 +1,5 @@
+"""Watchlist API. Step 3: Add always uses show_id; remove supports show_id (preferred) or title (legacy)."""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
@@ -11,7 +13,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
 def _serialize_item(item: WatchlistItem) -> dict:
-    """Build watchlist entry: prefer show relation for title/poster_url, else denormalized title."""
+    """Build watchlist entry: prefer show relation for title/poster_url, else denormalized title (legacy)."""
     title = item.title
     poster_url = None
     show_id = item.show_id
@@ -102,6 +104,7 @@ def remove_from_watchlist(
             .first()
         )
     else:
+        # Legacy: remove by title (for pre-migration items with show_id NULL)
         title = (payload.title or "").strip()
         if not title:
             raise AppException(

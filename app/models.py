@@ -6,6 +6,8 @@ from app.db import Base
 
 
 class User(Base):
+    """Step 3: users – full_name, email (unique), hashed_password, date_of_birth, created_at."""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -19,11 +21,20 @@ class User(Base):
 
 
 class WatchlistItem(Base):
+    """Step 3: watchlist_items. New inserts must always include show_id (API enforces).
+    title is legacy/fallback only. Partial unique (user_id, show_id) when show_id IS NOT NULL.
+    FK to shows uses ON DELETE CASCADE."""
+
     __tablename__ = "watchlist_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    show_id = Column(Integer, ForeignKey("shows.id"), index=True, nullable=True)
-    title = Column(String, nullable=True)  # denormalized from Show for display / legacy
+    show_id = Column(
+        Integer,
+        ForeignKey("shows.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    title = Column(String, nullable=True)  # Legacy/fallback; denormalized from Show for display
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
 
@@ -32,6 +43,8 @@ class WatchlistItem(Base):
 
 
 class Show(Base):
+    """Step 3: shows – tmdb_id (unique, indexed), embedding (Vector 384), TMDB metadata."""
+
     __tablename__ = "shows"
 
     id = Column(Integer, primary_key=True, index=True)

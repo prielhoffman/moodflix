@@ -136,16 +136,22 @@ class RecommendationOutput(BaseModel):
 
 
 class SaveRequest(BaseModel):
+    """Legacy: add/remove by title only. Not used by current API. TODO V2: remove if unused."""
+
     title: str = Field(..., description="Title of the show to save/remove")
 
 
 class WatchlistAddRequest(BaseModel):
+    """Step 3: Add by show_id only. New watchlist inserts must always include show_id."""
+
     show_id: int = Field(..., ge=1, description="ID of the show (shows.id) to add")
 
 
 class WatchlistRemoveRequest(BaseModel):
-    show_id: Optional[int] = Field(None, ge=1, description="ID of the show to remove")
-    title: Optional[str] = Field(None, description="Title of the show to remove (legacy / when show_id not set)")
+    """Step 3: Prefer show_id. title is legacy for pre-migration items. TODO V2: deprecate remove-by-title."""
+
+    show_id: Optional[int] = Field(None, ge=1, description="ID of the show to remove (preferred)")
+    title: Optional[str] = Field(None, description="Legacy: title of the show to remove (when show_id not set)")
 
     @model_validator(mode="after")
     def at_least_one_identifier(self):
@@ -155,8 +161,10 @@ class WatchlistRemoveRequest(BaseModel):
 
 
 class WatchlistItemOut(BaseModel):
+    """Step 3: show_id null for legacy items; title from show relation or denormalized."""
+
     show_id: Optional[int] = Field(None, description="ID of the show (null for legacy items)")
-    title: str = Field(..., description="Show title (from show or denormalized)")
+    title: str = Field(..., description="Show title (from show relation or denormalized)")
     poster_url: Optional[str] = Field(None, description="Poster URL when available from show")
 
 
@@ -221,7 +229,7 @@ class Token(BaseModel):
 
 # ----------------------------------------------------
 class WatchlistTitle(BaseModel):
-    """Legacy: add/remove by title only. Prefer WatchlistAddRequest / WatchlistRemoveRequest with show_id."""
+    """Legacy: add/remove by title only. Not used by current API. TODO V2: remove if unused."""
     title: str
 
 # --------------------------------- SEMANTIC SEARCH ---------------------------------
