@@ -32,7 +32,7 @@ describe("moodflixApi", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:8000/recommend",
+      "http://localhost:8000/recommend",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify(payload),
@@ -64,7 +64,7 @@ describe("moodflixApi", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "http://127.0.0.1:8000/auth/login",
+      "http://localhost:8000/auth/login",
       expect.objectContaining({
         method: "POST",
       })

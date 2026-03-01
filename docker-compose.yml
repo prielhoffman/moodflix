@@ -1,7 +1,7 @@
 services:
   db:
     # Postgres image with pgvector pre-installed
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:pg16
     container_name: moodflix-db
     restart: always
     environment:
@@ -36,6 +36,22 @@ services:
     depends_on:
       - db
     entrypoint: ["/app/scripts/docker-entrypoint.sh"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: moodflix-frontend
+    container_name: moodflix-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Keep container node_modules; host mount would otherwise hide them
+      - /app/node_modules
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
