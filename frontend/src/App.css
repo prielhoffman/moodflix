@@ -746,26 +746,35 @@ body {
 .tab-button {
   flex: 1;
   padding: 0.5rem 0.6rem;
-  background: #0f172a;
+  background: transparent;
   color: #cbd5f5;
-  border: 1px solid #1e293b;
-  border-radius: 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 400;
 }
 
-.tab-button.active {
-  background: #6366f1;
+.auth-modal .tab-button.active {
+  font-weight: 700;
   color: white;
-  border-color: #6366f1;
+  border-bottom-color: #6366f1;
 }
 
 .auth-form .form-group {
   text-align: left;
 }
 
+.auth-form .field-error {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: #f87171;
+}
+
 .auth-form .error-text {
   text-align: center;
+  margin-bottom: 0.5rem;
 }
 
 /* ================= USER INFO MODAL ================= */

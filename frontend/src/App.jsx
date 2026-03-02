@@ -33,10 +33,6 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState("login"); // "login" | "register"
   const [authContextMessage, setAuthContextMessage] = useState(null); // e.g. why modal was opened (watchlist)
-  const [authFullName, setAuthFullName] = useState("");
-  const [authDateOfBirth, setAuthDateOfBirth] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [userInfoOpen, setUserInfoOpen] = useState(false);
@@ -50,15 +46,16 @@ function App() {
     loadWatchlist();
   }, []);
 
-  /* Close User Info modal on Escape */
+  /* Close modals on Escape */
   useEffect(() => {
-    if (!userInfoOpen) return;
     const handleKeyDown = (e) => {
-      if (e.key === "Escape") setUserInfoOpen(false);
+      if (e.key !== "Escape") return;
+      if (userInfoOpen) setUserInfoOpen(false);
+      if (authOpen) closeAuthModal();
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [userInfoOpen]);
+  }, [userInfoOpen, authOpen]);
 
   /* Clear recommendations when navigating away from /recommend */
   useEffect(() => {
@@ -195,72 +192,16 @@ function App() {
     setAuthError(null);
     setAuthContextMessage(null);
     setAuthLoading(false);
-    setAuthFullName("");
-    setAuthDateOfBirth("");
-    setAuthEmail("");
-    setAuthPassword("");
   }
 
-  async function handleAuthSubmit(event) {
-    event.preventDefault();
-    setAuthError(null);
-    setAuthLoading(true);
-    let authSucceeded = false;
+  function handleAuthSuccess(user) {
+    setAuthUser(user);
+    loadWatchlist().catch(() => setError("Logged in, but failed to load watchlist."));
+    closeAuthModal();
+  }
 
-    try {
-      if (authTab === "register") {
-        // Client-side validation: user must be at least 13
-        const dob = new Date(authDateOfBirth);
-        const today = new Date();
-        let age = today.getFullYear() - dob.getFullYear();
-        const monthDiff = today.getMonth() - dob.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
-          age--;
-        }
-        if (age < 13) {
-          setAuthError("You must be at least 13 years old to register.");
-          setAuthLoading(false);
-          return;
-        }
-        if (dob >= today) {
-          setAuthError("Date of birth must be in the past.");
-          setAuthLoading(false);
-          return;
-        }
-        await register(authFullName, authDateOfBirth, authEmail, authPassword);
-      }
-
-      await login(authEmail, authPassword);
-      authSucceeded = true;
-
-      try {
-        const user = await fetchMe();
-        setAuthUser(user);
-      } catch (err) {
-        console.error("fetchMe failed after auth", err);
-      }
-
-      try {
-        await loadWatchlist();
-      } catch (err) {
-        console.error("Watchlist load failed after auth", err);
-        setError("Logged in, but failed to load watchlist.");
-      }
-    } catch (err) {
-      const msg = String(err?.message || "");
-      if (msg.includes("HTTP 401")) {
-        setAuthError("Invalid email or password.");
-      } else if (msg.includes("HTTP 400") && authTab === "register") {
-        setAuthError("Email already registered.");
-      } else {
-        setAuthError("Login failed. Please try again.");
-      }
-    } finally {
-      if (authSucceeded) {
-        closeAuthModal();
-      }
-      setAuthLoading(false);
-    }
+  function handleAuthError(message) {
+    setAuthError(message);
   }
 
   function handleLogout() {
@@ -327,10 +268,6 @@ function App() {
       <AuthModal
         open={authOpen}
         tab={authTab}
-        fullName={authFullName}
-        dateOfBirth={authDateOfBirth}
-        email={authEmail}
-        password={authPassword}
         error={authError}
         loading={authLoading}
         message={authContextMessage}
@@ -339,11 +276,13 @@ function App() {
           setAuthTab(tab);
           setAuthError(null);
         }}
-        onFullNameChange={setAuthFullName}
-        onDateOfBirthChange={setAuthDateOfBirth}
-        onEmailChange={setAuthEmail}
-        onPasswordChange={setAuthPassword}
-        onSubmit={handleAuthSubmit}
+        onAuthStart={() => setAuthLoading(true)}
+        onAuthEnd={() => setAuthLoading(false)}
+        onAuthSuccess={handleAuthSuccess}
+        onAuthError={handleAuthError}
+        loginApi={login}
+        registerApi={register}
+        fetchMeApi={fetchMe}
       />
 
       <UserInfoModal
