@@ -1,5 +1,5 @@
-# React + Vite frontend
-FROM node:18-alpine
+# React + Vite frontend (Node 22+ required for Vite/Rolldown; node:util styleText)
+FROM node:22-alpine
 
 WORKDIR /app
 

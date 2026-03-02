@@ -116,6 +116,38 @@ function App() {
     }
   }
 
+  /** Home quick flow: mood or search query → POST /recommend → navigate to /recommend with results. */
+  async function handleQuickRecommend({ mood, query, guestFamilySafe }) {
+    setIsLoading(true);
+    setError(null);
+    setRecommendations([]);
+
+    const payload = {
+      mood: mood || "chill",
+      binge_preference: "binge",
+      preferred_genres: [],
+      episode_length_preference: "any",
+      watching_context: "alone",
+      ...(query && query.trim() ? { query: query.trim() } : {}),
+    };
+    if (!authUser && typeof guestFamilySafe === "boolean") {
+      payload.guest_family_safe = guestFamilySafe;
+    }
+
+    try {
+      const results = await recommendShows(payload);
+      setRecommendations(Array.isArray(results) ? results : []);
+      await loadWatchlist();
+      navigate("/recommend");
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
+      navigate("/recommend");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   function scrollCarousel(direction) {
     if (!carouselRef.current) return;
 
@@ -329,7 +361,9 @@ function App() {
               path="/"
               element={
                 <HomePage
-                  onStart={() => navigate("/recommend")}
+                  authUser={authUser}
+                  onQuickRecommend={handleQuickRecommend}
+                  isLoading={isLoading}
                 />
               }
             />

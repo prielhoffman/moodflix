@@ -68,6 +68,11 @@ class RecommendationInput(BaseModel):
         description="Optional natural language query for semantic candidate retrieval",
     )
 
+    guest_family_safe: Optional[bool] = Field(
+        None,
+        description="For unauthenticated users only: True = apply family/general safety filter (under 18), False/None = adult (18+). Ignored when authenticated.",
+    )
+
 
 # --------------------------------- OUTPUT ---------------------------------
 class RecommendationOutput(BaseModel):

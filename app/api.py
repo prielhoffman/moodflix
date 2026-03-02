@@ -105,9 +105,13 @@ def recommend(
     """
     Receive user preferences and return TV show recommendations.
     When authenticated, age is inferred from the user's date_of_birth for content filtering.
-    When unauthenticated, age filtering is skipped (treated as adult).
+    When unauthenticated, use guest_family_safe: True → age 17 (family filter), else age 18 (adult).
     """
-    age = compute_age(current_user.date_of_birth) if current_user else None
+    if current_user is not None:
+        age = compute_age(current_user.date_of_birth)
+    else:
+        # Guest: guest_family_safe True → apply family filter (age 17), else adult (18)
+        age = 17 if getattr(input_data, "guest_family_safe", None) is True else 18
     try:
         return recommend_shows(input_data, db=db, age=age)
     except AppException:

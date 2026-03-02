@@ -1,4 +1,4 @@
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "./Header.css";
 
 function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
@@ -9,25 +9,6 @@ function Header({ userEmail, onLogin, onRegister, onLogout, onEmailClick }) {
         <Link to="/" className="logo-link">
           <h2 className="logo">MoodFlix 📺</h2>
         </Link>
-
-        {/* Navigation */}
-        <nav className="nav">
-          <NavLink to="/" className="nav-link">
-            Home
-          </NavLink>
-
-          <NavLink to="/recommend" className="nav-link">
-            Recommend
-          </NavLink>
-
-          <NavLink to="/search" className="nav-link">
-            Search
-          </NavLink>
-
-          <NavLink to="/watchlist" className="nav-link">
-            Watchlist
-          </NavLink>
-        </nav>
 
         <div className="auth-area">
           {userEmail ? (
