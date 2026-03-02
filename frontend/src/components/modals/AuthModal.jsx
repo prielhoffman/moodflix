@@ -89,6 +89,11 @@ function AuthModal({
       const msg = String(err?.message || "");
       if (msg.includes("HTTP 401")) {
         onAuthError("Invalid email or password.");
+      } else if (
+        msg.includes("temporarily busy") ||
+        msg.includes("try again in a few minutes")
+      ) {
+        onAuthError("Server is temporarily busy. Please try again in a few minutes.");
       } else {
         onAuthError("Login failed. Please try again.");
       }
@@ -115,6 +120,11 @@ function AuthModal({
       const msg = String(err?.message || "");
       if (msg.includes("HTTP 400")) {
         onAuthError("Email already registered.");
+      } else if (
+        msg.includes("temporarily busy") ||
+        msg.includes("try again in a few minutes")
+      ) {
+        onAuthError("Server is temporarily busy. Please try again in a few minutes.");
       } else {
         onAuthError("Registration failed. Please try again.");
       }
@@ -184,6 +194,7 @@ function AuthModal({
                 id="authPassword"
                 type="password"
                 autoComplete="current-password"
+                maxLength={72}
                 {...loginForm.register("password")}
               />
               {loginForm.formState.errors.password && (
@@ -253,6 +264,7 @@ function AuthModal({
                 id="authPasswordReg"
                 type="password"
                 autoComplete="new-password"
+                maxLength={72}
                 {...registerForm.register("password")}
               />
               {registerForm.formState.errors.password && (
@@ -266,6 +278,7 @@ function AuthModal({
                 id="authConfirmPassword"
                 type="password"
                 autoComplete="new-password"
+                maxLength={72}
                 {...registerForm.register("confirmPassword")}
               />
               {registerForm.formState.errors.confirmPassword && (

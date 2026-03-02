@@ -57,12 +57,15 @@ function App() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [userInfoOpen, authOpen]);
 
-  /* Clear recommendations when navigating away from /recommend */
+  /* Clear recommendations when leaving the recommend view (/ when auth, /recommend) */
   useEffect(() => {
-    if (location.pathname !== "/recommend") {
+    const onRecommendView =
+      location.pathname === "/recommend" ||
+      (location.pathname === "/" && authUser);
+    if (!onRecommendView) {
       setRecommendations([]);
     }
-  }, [location.pathname]);
+  }, [location.pathname, authUser]);
 
   /* Load current user if token exists */
   useEffect(() => {
@@ -198,6 +201,7 @@ function App() {
     setAuthUser(user);
     loadWatchlist().catch(() => setError("Logged in, but failed to load watchlist."));
     closeAuthModal();
+    navigate("/");
   }
 
   function handleAuthError(message) {
@@ -210,6 +214,12 @@ function App() {
     setWatchlist([]);
     setError(null);
     setUserInfoOpen(false);
+  }
+
+  /** Clear recommendation state before leaving recommend flow. */
+  function handleGoToSemanticSearch() {
+    setRecommendations([]);
+    setError(null);
   }
 
   async function toggleSave(show) {
@@ -258,11 +268,12 @@ function App() {
   return (
     <div className="app">
       <Header
-        userEmail={authUser?.email}
+        authUser={authUser}
         onLogin={() => openAuthModal("login")}
         onRegister={() => openAuthModal("register")}
         onLogout={handleLogout}
-        onEmailClick={() => setUserInfoOpen(true)}
+        onOpenProfile={() => setUserInfoOpen(true)}
+        onGoToSemanticSearch={handleGoToSemanticSearch}
       />
 
       <AuthModal
@@ -303,6 +314,14 @@ function App() {
                   authUser={authUser}
                   onQuickRecommend={handleQuickRecommend}
                   isLoading={isLoading}
+                  onSubmitPreferences={handleFormSubmit}
+                  error={error}
+                  recommendations={recommendations}
+                  carouselRef={carouselRef}
+                  onScrollCarousel={scrollCarousel}
+                  isSaved={isSaved}
+                  onToggleSave={toggleSave}
+                  savingTitle={savingTitle}
                 />
               }
             />

@@ -41,17 +41,23 @@ if _is_production and SECRET_KEY == "dev-secret-key-change-in-production":
     )
 
 
+# bcrypt limits input to 72 bytes; truncate to avoid ValueError
+_BCRYPT_MAX_LENGTH = 72
+
+
 def hash_password(plain: str) -> str:
     """
     Hash a plain text password using bcrypt.
 
     Args:
-        plain: Plain text password string
+        plain: Plain text password string (truncated to 72 bytes for bcrypt)
 
     Returns:
         Hashed password string
     """
-    return pwd_context.hash(plain)
+    print(f"DEBUG: Password length is {len(plain)}")
+    password_bytes = plain.encode("utf-8")[:72]
+    return pwd_context.hash(password_bytes.decode("utf-8", errors="ignore"))
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -59,13 +65,14 @@ def verify_password(plain: str, hashed: str) -> bool:
     Verify a plain text password against a hashed password.
 
     Args:
-        plain: Plain text password to verify
+        plain: Plain text password to verify (truncated to 72 bytes for bcrypt)
         hashed: Hashed password to compare against
 
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain, hashed)
+    password_bytes = plain.encode("utf-8")[:72]
+    return pwd_context.verify(password_bytes.decode("utf-8", errors="ignore"), hashed)
 
 
 def create_access_token(data: dict, expires_minutes: Optional[int] = None) -> str:

@@ -205,7 +205,7 @@ class UserCreate(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=255, description="User's full name")
     date_of_birth: date = Field(..., description="User's date of birth (age 13-120)")
     email: EmailStr
-    password: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1, max_length=72)
 
     @model_validator(mode="after")
     def validate_dob(self):
@@ -215,7 +215,7 @@ class UserCreate(BaseModel):
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., max_length=72)
 
 
 class UserPublic(BaseModel):
