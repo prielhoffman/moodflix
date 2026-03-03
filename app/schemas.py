@@ -147,9 +147,17 @@ class SaveRequest(BaseModel):
 
 
 class WatchlistAddRequest(BaseModel):
-    """Step 3: Add by show_id only. New watchlist inserts must always include show_id."""
+    """Add by show_id (preferred) or by title when show_id is missing (e.g. recommendations from static data)."""
 
-    show_id: int = Field(..., ge=1, description="ID of the show (shows.id) to add")
+    show_id: Optional[int] = Field(None, ge=1, description="ID of the show (shows.id) to add")
+    title: Optional[str] = Field(None, description="Title of the show to add (used when show_id not provided)")
+    poster_url: Optional[str] = Field(None, description="Optional poster URL when creating a show from title (fallback data)")
+
+    @model_validator(mode="after")
+    def at_least_one_identifier(self):
+        if self.show_id is None and (self.title is None or not str(self.title).strip()):
+            raise ValueError("Either show_id or title must be provided")
+        return self
 
 
 class WatchlistRemoveRequest(BaseModel):

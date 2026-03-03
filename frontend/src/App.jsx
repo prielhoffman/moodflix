@@ -175,15 +175,20 @@ function scrollCarousel(direction) {
   }
 
   function handleWatchlistError(err) {
-    const msg = String(err?.message || "");
+    const status = err?.status;
+    const msg = String(err?.message || "").trim();
 
-    if (msg.includes("HTTP 401") || msg.includes("HTTP 403")) {
+    if (status === 401 || status === 403 || msg.toLowerCase().includes("credentials") || msg.toLowerCase().includes("unauthorized")) {
       setAuthContextMessage("Please log in or register to save to your watchlist.");
       openAuthModal("login");
       return;
     }
 
-    setError("Could not update watchlist. Please try again.");
+    if (status === 404 && msg) {
+      setError(msg);
+      return;
+    }
+    setError(msg || "Could not update watchlist. Please try again.");
   }
 
   function openAuthModal(tab, contextMessage = null) {
@@ -235,23 +240,41 @@ function scrollCarousel(direction) {
       return;
     }
 
+    const id = show.id ?? show.show_id;
+    const hasValidId = id != null && Number(id) > 0;
+    const hasTitle = title && String(title).trim() !== "";
+    if (!isSaved(show) && !hasValidId && !hasTitle) {
+      setError("This show isn't in the catalog and can't be added to the watchlist.");
+      return;
+    }
+
+    const prevWatchlist = watchlist;
+    const willRemove = isSaved(show);
+
     setSavingTitle(title);
 
+    if (willRemove) {
+      setWatchlist((prev) => prev.filter((item) => {
+        const itemId = item?.show_id ?? item?.id;
+        const matchId = id != null && itemId != null && Number(itemId) === Number(id);
+        const matchTitle = item?.title === title;
+        return !(matchId || matchTitle);
+      }));
+    } else {
+      setWatchlist((prev) => [...prev, { show_id: hasValidId ? id : null, title: show.title, poster_url: show.poster_url ?? null }]);
+    }
+
     try {
-      if (isSaved(show)) {
+      if (willRemove) {
         const data = await removeFromWatchlist(show);
         setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
       } else {
-        const id = show.id ?? show.show_id;
-        if (id == null || Number(id) <= 0) {
-          setError("This show isn't in the catalog and can't be added to the watchlist.");
-          return;
-        }
         const data = await addToWatchlist(show);
         setWatchlist(Array.isArray(data.watchlist) ? data.watchlist : []);
       }
     } catch (err) {
       console.error(err);
+      setWatchlist(prevWatchlist);
       handleWatchlistError(err);
     } finally {
       setSavingTitle(null);

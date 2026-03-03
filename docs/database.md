@@ -1,0 +1,155 @@
+# Database: Migrations & Reset (Local Development)
+
+Use this when **FastAPI runs locally** (uvicorn) and **PostgreSQL runs in Docker**. Schema is managed by **Alembic**; there is no `Base.metadata.create_all()` on startup.
+
+---
+
+## 1. DATABASE_URL / POSTGRES_HOST
+
+- When the **backend runs on your machine** (e.g. `uvicorn app.api:app`), it must connect to Postgres via **localhost** (or `127.0.0.1`), because the container exposes port 5432 to the host.
+- In your **`.env`** (copy from `.env.example` if needed), set:
+
+  ```env
+  POSTGRES_HOST=localhost
+  POSTGRES_USER=postgres
+  POSTGRES_PASSWORD=postgres
+  POSTGRES_DB=moodflix
+  POSTGRES_PORT=5432
+  ```
+
+  Or a single URL:
+
+  ```env
+  DATABASE_URL=postgresql://postgres:postgres@localhost:5432/moodflix
+  ```
+
+- **Do not** use `POSTGRES_HOST=db` when running uvicorn on your machine; `db` is the Docker service name and only works from inside the Docker network.
+
+---
+
+## 2. Exact terminal commands
+
+All commands assume you are in the project root and (if you use a venv) that it is activated.
+
+### Restart the PostgreSQL Docker container
+
+```powershell
+docker compose restart db
+```
+
+Or stop and start clean (container only; data volume is kept):
+
+```powershell
+docker compose stop db
+docker compose up -d db
+```
+
+### Check current migration state
+
+```powershell
+alembic current
+```
+
+### Apply all migrations (upgrade to head)
+
+```powershell
+alembic upgrade head
+```
+
+### Generate a new migration (after changing SQLAlchemy models)
+
+```powershell
+alembic revision --autogenerate -m "describe_your_change"
+```
+
+Then review the new file under `alembic/versions/` and apply it:
+
+```powershell
+alembic upgrade head
+```
+
+### Reset the database (development only)
+
+This **destroys all data** in the `moodflix` database and reapplies migrations from scratch.
+
+**Option A – Drop and recreate the database (recommended for a clean reset):**
+
+```powershell
+# Connect to default postgres DB and drop moodflix (replace password if different)
+docker exec -it moodflix-db psql -U postgres -c "DROP DATABASE IF EXISTS moodflix;"
+docker exec -it moodflix-db psql -U postgres -c "CREATE DATABASE moodflix;"
+
+# Re-run all migrations
+alembic upgrade head
+```
+
+**Option B – Downgrade all then upgrade (only if you have no migration conflicts):**
+
+```powershell
+alembic downgrade base
+alembic upgrade head
+```
+
+**Option C – Nuclear: remove the Postgres volume and recreate the container (all data in the volume is lost):**
+
+```powershell
+docker compose down
+docker volume rm moodflix_postgres_data
+docker compose up -d db
+# Wait a few seconds for Postgres to be ready, then:
+alembic upgrade head
+```
+
+---
+
+## 3. Migration chain (head)
+
+Current head revision: **e5f6a7b8c9d0** (`add_user_full_name_date_of_birth`).
+
+Order:  
+`77c9ad2999fb` → `4e3c32caba36` → `a1b2c3d4e5f6` → `e39914a70776` → `48da73d26c21` → `6b6f7d9c2f10` → `b7c8d9e0f1a2` → `c8d9e0f1a2b3` → `d9e0f1a2b3c4` → **e5f6a7b8c9d0**.
+
+If your DB was created earlier and some migrations were never run, the schema will be missing tables or columns (e.g. `users.full_name`, `users.date_of_birth`, `shows.content_rating`, `watchlist_items.show_id`). Running `alembic upgrade head` brings the DB in line with the current models.
+
+---
+
+## 4. If schema mismatch is detected
+
+- **Symptom:** Errors about missing columns/tables or wrong types when the app runs.
+- **Cause:** Database is behind the migrations (or migrations were never run).
+- **Fix:** Run `alembic upgrade head` so the DB matches the migration chain. If you prefer a clean slate, use the reset commands above, then `alembic upgrade head`.
+
+After any model change, add a new migration with `alembic revision --autogenerate -m "..."`, then run `alembic upgrade head`.
+
+---
+
+## 5. Verify and seed the `shows` table
+
+Recommendations can come from the **static fallback** when the `shows` table is empty. **Watchlist Save** still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` first.
+
+### Check if `shows` has rows
+
+```powershell
+docker exec -it moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
+```
+
+### Seed `shows` from TMDB (optional)
+
+Requires `TMDB_API_KEY` in `.env`. Inserts popular TV shows so recommendations and watchlist can use DB-backed `show_id`:
+
+```powershell
+python scripts/ingest_tmdb.py
+```
+
+Then (optional) generate embeddings for semantic search:
+
+```powershell
+python scripts/generate_embeddings.py
+```
+
+### If you see "Show not found" when adding by `show_id`
+
+That means the given `show_id` is not in `shows`. Either:
+
+- **Option A (current behavior):** Add by **title** instead of `show_id`; the backend will create a minimal `Show` row and then the watchlist item.
+- **Option B:** Seed the DB first (`python scripts/ingest_tmdb.py`) so recommendations return shows that exist in `shows`, and the frontend sends `show_id`.

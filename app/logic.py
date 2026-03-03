@@ -490,6 +490,14 @@ def recommend_shows(
     if not shows:
         shows = get_all_shows()
 
+    # When using static data, resolve internal DB id by title so watchlist add works.
+    if db and shows:
+        for show in shows:
+            if show.get("id") is None and show.get("title"):
+                row = db.query(Show).filter(Show.title == show["title"]).first()
+                if row is not None:
+                    show["id"] = row.id
+
     foreign_intent = _has_foreign_intent(user_input)
     kids_intent = _requests_kids_content(user_input)
     # Family context and age-based flags before building user_genres.

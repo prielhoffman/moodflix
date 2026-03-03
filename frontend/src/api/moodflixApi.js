@@ -115,33 +115,39 @@ function normalizeWatchlist(rawWatchlist) {
 /*
   Generic JSON request helper
 */
+function createApiError(message, status) {
+  const err = new Error(message);
+  if (status != null) err.status = status;
+  return err;
+}
+
 async function requestJson(path, options = {}) {
   const url = `${API_BASE}${path}`;
   const token = getAccessToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+    // Always send Bearer token when present so watchlist/auth requests are authenticated
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 
   const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    let message = `Request failed: ${text || res.statusText || res.status}`;
     try {
       const body = JSON.parse(text);
       if (body?.message && typeof body.message === "string") {
-        throw new Error(body.message);
+        message = body.message;
       }
-    } catch (parseErr) {
-      if (parseErr instanceof SyntaxError) {
-        throw new Error(`Request failed: ${text || res.statusText || "Unknown error"}`);
-      }
-      throw parseErr;
+    } catch (_) {
+      // keep default message
     }
-    throw new Error(`Request failed: ${text || res.statusText || "Unknown error"}`);
+    throw createApiError(message, res.status);
   }
 
   const contentType = res.headers.get("content-type") || "";
@@ -238,18 +244,30 @@ export async function recommendShows(preferences) {
 /* ================= WATCHLIST ================= */
 
 /*
-  Add by show_id (required). Pass a show object with id or { show_id }.
-  Example: addToWatchlist(show) or addToWatchlist({ show_id: 123 })
+  Add by show_id (preferred) or by title when show_id is missing.
+  Backend expects { show_id: number } or { title: string }; show_id must be integer.
 */
 export async function addToWatchlist(input) {
   const showId = typeof input === "object" && input != null ? input.id ?? input.show_id : null;
-  if (showId == null || Number(showId) <= 0) {
-    throw new Error("addToWatchlist: show must have an id (show_id)");
+  const title = typeof input === "object" && input != null ? input.title : null;
+  const hasValidId = showId != null && Number(showId) > 0;
+  const hasTitle = title != null && String(title).trim() !== "";
+
+  if (!hasValidId && !hasTitle) {
+    throw new Error("addToWatchlist: show must have an id (show_id) or title");
   }
 
   if (typeof input === "object" && input?.title && input?.poster_url) {
     cacheShowsPosters([input]);
   }
+
+  const payload = hasValidId
+    ? { show_id: Number(showId) }
+    : {
+        title: String(title).trim(),
+        ...(input?.poster_url ? { poster_url: input.poster_url } : {}),
+      };
+  console.log("Watchlist add payload sent:", payload);
 
   const data = await tryPaths(
     [
@@ -260,7 +278,7 @@ export async function addToWatchlist(input) {
     ],
     {
       method: "POST",
-      body: JSON.stringify({ show_id: Number(showId) }),
+      body: JSON.stringify(payload),
     }
   );
 
