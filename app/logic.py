@@ -549,11 +549,21 @@ def recommend_shows(
         except Exception:
             shows = []
     else:
+        # Form flow (no query): full DB scan. Use static fallback if DB is empty or under-seeded.
+        # Under-seeded: DB has < SEMANTIC_MIN_EMBEDDINGS rows (e.g. 1 row from watchlist add-by-title).
         if db is not None:
             try:
                 shows = _load_shows_from_db(db)
                 source_path = "db_full_scan"
                 logger.info("[recommend] source=db_full_scan: _load_shows_from_db returned len(shows)=%d", len(shows))
+                if len(shows) < config.SEMANTIC_MIN_EMBEDDINGS:
+                    logger.info(
+                        "[recommend] form flow: DB has %d rows (< %d); using static fallback for sufficient pool.",
+                        len(shows),
+                        config.SEMANTIC_MIN_EMBEDDINGS,
+                    )
+                    shows = get_all_shows()
+                    source_path = "fallback"
             except Exception:
                 shows = []
                 logger.warning("[recommend] source=db: load failed, using fallback")

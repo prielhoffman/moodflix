@@ -431,6 +431,69 @@ def test_static_data_is_not_mutated_across_requests():
     assert "MUTATED" not in str(s2[0].get("content_rating"))
 
 
+def test_form_flow_uses_static_fallback_when_db_under_seeded(monkeypatch):
+    """
+    Regression: when DB has < SEMANTIC_MIN_EMBEDDINGS rows (e.g. 1 from watchlist add),
+    form flow must use static fallback to return top_n results, not 1.
+    """
+    from app import config
+
+    class SingleRowShow:
+        id = 1
+        tmdb_id = -12345
+        title = "Stranger Things"
+        overview = "Test"
+        poster_url = None
+        genres = ["sci-fi", "drama"]
+        popularity = 1.0
+        vote_average = 8.0
+        vote_count = 100
+        first_air_date = None
+        content_rating = "TV-14"
+        average_episode_length = 55
+        number_of_seasons = 4
+        original_language = "en"
+
+    single_row = [SingleRowShow()]
+
+    class UnderSeededDB:
+        def execute(self, *args):
+            return type("R", (), {"scalar": lambda self: 1})()
+
+        def query(self, *args):
+            return self
+
+        def all(self):
+            return single_row
+
+        def filter(self, *args):
+            return self
+
+        def first(self):
+            return None
+
+        def get_bind(self):
+            return type("U", (), {"host": "test", "database": "test", "url": None})()
+
+    monkeypatch.setattr("app.logic.get_tv_details_cached", lambda *a, **k: None)
+
+    user_input = RecommendationInput(
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.CHILL,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.ALONE,
+    )
+
+    results = recommend_shows(user_input, db=UnderSeededDB(), age=30, top_n=10)
+
+    assert len(results) >= 5, (
+        f"With under-seeded DB (1 row), expected static fallback to return >= 5 results, got {len(results)}"
+    )
+    assert len(results) <= 10
+
+
 def test_greys_anatomy_variant_blocked_in_family_context():
     """
     "Greys Anatomy" (no apostrophe) must be blocked in Kids/Family context
