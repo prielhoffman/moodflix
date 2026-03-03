@@ -26,6 +26,7 @@ import {
 function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [watchlist, setWatchlist] = useState([]); // [{ title, poster_url }]
+  const [lastRecommendationInput, setLastRecommendationInput] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savingTitle, setSavingTitle] = useState(null);
@@ -103,6 +104,7 @@ function App() {
     setIsLoading(true);
     setError(null);
     setRecommendations([]);
+    setLastRecommendationInput(preferences);
 
     try {
       const results = await recommendShows(preferences);
@@ -133,6 +135,7 @@ function App() {
     if (!authUser && typeof guestFamilySafe === "boolean") {
       payload.guest_family_safe = guestFamilySafe;
     }
+    setLastRecommendationInput(payload);
 
     try {
       const results = await recommendShows(payload);
@@ -148,7 +151,7 @@ function App() {
     }
   }
 
-  function scrollCarousel(direction) {
+function scrollCarousel(direction) {
     if (!carouselRef.current) return;
 
     carouselRef.current.scrollBy({
@@ -315,6 +318,7 @@ function App() {
                   onQuickRecommend={handleQuickRecommend}
                   isLoading={isLoading}
                   onSubmitPreferences={handleFormSubmit}
+                  syncedMood={lastRecommendationInput?.mood}
                   error={error}
                   recommendations={recommendations}
                   carouselRef={carouselRef}
@@ -330,8 +334,11 @@ function App() {
               path="/recommend"
               element={
                 <RecommendPage
+                  authUser={authUser}
+                  onQuickRecommend={handleQuickRecommend}
                   onSubmitPreferences={handleFormSubmit}
                   isLoading={isLoading}
+                  syncedMood={lastRecommendationInput?.mood}
                   error={error}
                   recommendations={recommendations}
                   carouselRef={carouselRef}

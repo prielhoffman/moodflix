@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, List, Optional
@@ -757,18 +758,18 @@ def recommend_shows(
         popularity_signal = (popularity_norm * config.POPULARITY_NORM_WEIGHT) + (vote_count_norm * config.VOTE_COUNT_NORM_WEIGHT)
         base_score = (rating_norm * config.RATING_WEIGHT) + (popularity_signal * (1.0 - config.RATING_WEIGHT))
 
-        # Strong genre multiplier for user-selected genres.
+        # Mood is required and the primary ranking factor (MoodFlix identity).
+        final_score = base_score
+        if item["mood_matched"]:
+            final_score *= config.MOOD_BOOST_MULTIPLIER
+
+        # Genre is optional: lighter multiplier when user selected genres and show matches.
         genre_score = 1.0
         if user_genres and common_genres:
             genre_score = config.GENRE_BASE_MULTIPLIER + min(
                 config.GENRE_EXTRA_CAP, config.GENRE_EXTRA_PER_MATCH * (len(common_genres) - 1)
             )
-
-        final_score = genre_score * base_score
-
-        # Light mood boost within the already genre-filtered pool.
-        if item["mood_matched"]:
-            final_score *= config.MOOD_BOOST_MULTIPLIER
+        final_score *= genre_score
 
         # Family context: boost animation, family, comedy (clean sitcoms, MasterChef-style, etc.).
         if is_family_context and (show_genres & _FAMILY_FRIENDLY_GENRES):
@@ -804,6 +805,13 @@ def recommend_shows(
             elif not title_eng or not overview_eng:
                 # Non-ASCII text suggests non-English; slight penalty.
                 final_score *= config.NON_ASCII_PENALTY
+
+        # Entropy: ±RANKING_NOISE_FRACTION so same mood does not always yield identical top 10.
+        noise = 1.0 + random.uniform(
+            -config.RANKING_NOISE_FRACTION,
+            config.RANKING_NOISE_FRACTION,
+        )
+        final_score = max(0.0, final_score * noise)
 
         scored.append(
             {

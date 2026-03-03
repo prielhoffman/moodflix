@@ -13,6 +13,7 @@ function HomePage({
   onQuickRecommend,
   isLoading,
   onSubmitPreferences,
+  syncedMood,
   error,
   recommendations,
   carouselRef,
@@ -129,8 +130,24 @@ function HomePage({
       <section className="content-section" data-homepage-version="2.1">
         {/* VERSION 2.1 - HomePage unified view mode (prefs) */}
         <div className="content-wrapper">
+          <div className="home-quick-moods-row">
+            <span className="home-moods-label">Quick mood:</span>
+            <div className="home-moods-buttons">
+              {QUICK_MOODS.map(({ id, label, value }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="home-mood-btn"
+                  onClick={() => onQuickRecommend({ mood: value })}
+                  disabled={isLoading}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="preferences-box">
-            <PreferenceForm onSubmit={onSubmitPreferences} />
+            <PreferenceForm onSubmit={onSubmitPreferences} syncedMood={syncedMood} />
           </div>
 
           {isLoading && (
@@ -181,18 +198,32 @@ function HomePage({
                         <div className="card-content">
                           <h4>{show.title}</h4>
 
-                          {show.tmdb_rating != null && (
+                          {(show.tmdb_rating != null || show.number_of_seasons != null || show.average_episode_length != null) && (
                             <p className="rating-line">
-                              <span className="rating-star">★</span>{" "}
-                              {Number(show.tmdb_rating).toFixed(1)}
+                              {show.tmdb_rating != null && (
+                                <>
+                                  <span className="rating-star">★</span>{" "}
+                                  {Number(show.tmdb_rating).toFixed(1)}
+                                </>
+                              )}
+                              {(show.number_of_seasons != null || show.average_episode_length != null) && (
+                                <span className="card-meta">
+                                  {show.tmdb_rating != null ? " · " : ""}
+                                  {[show.number_of_seasons != null && `${show.number_of_seasons} seasons`, show.average_episode_length != null && `${show.average_episode_length} min`].filter(Boolean).join(" · ")}
+                                </span>
+                              )}
                             </p>
                           )}
 
                           <p>{show.short_summary}</p>
 
-                          <p>
-                            <strong>Why:</strong> {show.recommendation_reason}
-                          </p>
+                          {show.recommendation_reason && (
+                            <div className="recommendation-reason">
+                              <span className="recommendation-reason-icon" aria-hidden>💡</span>
+                              <span className="recommendation-reason-label">Why: </span>
+                              <span className="recommendation-reason-text">{show.recommendation_reason}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

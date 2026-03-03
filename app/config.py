@@ -45,16 +45,22 @@ RATING_WEIGHT = 0.5
 POPULARITY_NORM_WEIGHT = 0.6
 VOTE_COUNT_NORM_WEIGHT = 0.4
 
-# --------------------------------- Genre scoring ---------------------------------
-# When user selected genres and show matches: multiply base score by this + extra per additional genre.
-GENRE_BASE_MULTIPLIER = 2.0
+# --------------------------------- Genre scoring (optional form field) ---------------------------------
+# When user selected genres and show matches: light multiplier (genre is secondary to mood).
+GENRE_BASE_MULTIPLIER = 1.15
 # Extra multiplier per matching genre beyond the first (capped by GENRE_EXTRA_CAP).
-GENRE_EXTRA_PER_MATCH = 0.15
-GENRE_EXTRA_CAP = 0.6
+GENRE_EXTRA_PER_MATCH = 0.08
+GENRE_EXTRA_CAP = 0.35
+
+# --------------------------------- Mood scoring (required form field – primary ranking factor) ---------------------------------
+# Mood is the core identity of MoodFlix: strong multiplier when show genres match user mood.
+MOOD_BOOST_MULTIPLIER = 2.4
+
+# --------------------------------- Ranking variety (entropy) ---------------------------------
+# ± this fraction applied to final score so same mood does not always yield identical top 10.
+RANKING_NOISE_FRACTION = 0.10
 
 # --------------------------------- Mood and context boosts/penalties ---------------------------------
-# Mood is the star: strong multiplier when show genres match user mood (e.g. Happy → comedy/animation).
-MOOD_BOOST_MULTIPLIER = 1.5
 # Multiplier for animation/family/comedy when in family context.
 FAMILY_FRIENDLY_BOOST_MULTIPLIER = 1.18
 # Multiplier when kids/family context but show lacks Family/Kids/Animation genre.

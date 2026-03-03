@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const SUPPORTED_GENRES = [
   "action",
@@ -35,7 +35,9 @@ const LANGUAGE_OPTIONS = [
   PreferenceForm collects the user's basic preferences
   and sends them to the parent component via onSubmit.
 */
-function PreferenceForm({ onSubmit }) {
+const MOOD_VALUES = ["chill", "happy", "familiar", "focused", "adrenaline", "dark", "curious"];
+
+function PreferenceForm({ onSubmit, syncedMood }) {
   // Form state: matches backend field names exactly (age removed - inferred from user's date_of_birth when authenticated)
   const [formData, setFormData] = useState({
     mood: "chill",
@@ -45,6 +47,13 @@ function PreferenceForm({ onSubmit }) {
     episode_length_preference: "any",
     watching_context: "alone",
   });
+
+  // Keep Mood dropdown in sync when user picks a Quick Mood (or last request had a different mood).
+  useEffect(() => {
+    if (syncedMood && typeof syncedMood === "string" && MOOD_VALUES.includes(syncedMood.toLowerCase())) {
+      setFormData((prev) => (prev.mood === syncedMood ? prev : { ...prev, mood: syncedMood.toLowerCase() }));
+    }
+  }, [syncedMood]);
 
   // Handle changes for all inputs
   function handleChange(event) {
