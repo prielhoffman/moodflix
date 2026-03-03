@@ -2,18 +2,11 @@ import { useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import PreferenceForm from "../components/PreferenceForm";
 
-const QUICK_MOODS = [
-  { id: "chill", label: "😌 Chill", value: "chill" },
-  { id: "adrenaline", label: "📈 Adrenaline", value: "adrenaline" },
-  { id: "dark", label: "🌑 Dark", value: "dark" },
-];
-
 function HomePage({
   authUser,
   onQuickRecommend,
   isLoading,
   onSubmitPreferences,
-  syncedMood,
   error,
   recommendations,
   carouselRef,
@@ -44,13 +37,6 @@ function HomePage({
     onQuickRecommend({
       query: trimmed || undefined,
       mood: trimmed ? undefined : "chill",
-      guestFamilySafe,
-    });
-  }
-
-  function handleMoodClick(moodValue) {
-    onQuickRecommend({
-      mood: moodValue,
       guestFamilySafe,
     });
   }
@@ -86,23 +72,6 @@ function HomePage({
             </button>
           </form>
 
-          <div className="home-moods">
-            <span className="home-moods-label">Quick mood:</span>
-            <div className="home-moods-buttons">
-              {QUICK_MOODS.map(({ id, label, value }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="home-mood-btn"
-                  onClick={() => handleMoodClick(value)}
-                  disabled={isLoading}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {showGuestAgeToggle && (
             <div className="home-age-toggle">
               <label className="home-age-label">
@@ -130,24 +99,8 @@ function HomePage({
       <section className="content-section" data-homepage-version="2.1">
         {/* VERSION 2.1 - HomePage unified view mode (prefs) */}
         <div className="content-wrapper">
-          <div className="home-quick-moods-row">
-            <span className="home-moods-label">Quick mood:</span>
-            <div className="home-moods-buttons">
-              {QUICK_MOODS.map(({ id, label, value }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="home-mood-btn"
-                  onClick={() => onQuickRecommend({ mood: value })}
-                  disabled={isLoading}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="preferences-box">
-            <PreferenceForm onSubmit={onSubmitPreferences} syncedMood={syncedMood} />
+            <PreferenceForm onSubmit={onSubmitPreferences} />
           </div>
 
           {isLoading && (
@@ -267,23 +220,6 @@ function HomePage({
             {isLoading ? "Finding…" : "Find shows"}
           </button>
         </form>
-
-        <div className="home-moods">
-          <span className="home-moods-label">Quick mood:</span>
-          <div className="home-moods-buttons">
-            {QUICK_MOODS.map(({ id, label, value }) => (
-              <button
-                key={id}
-                type="button"
-                className="home-mood-btn"
-                onClick={() => handleMoodClick(value)}
-                disabled={isLoading}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <div className="home-age-toggle">
           <label className="home-age-label">

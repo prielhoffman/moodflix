@@ -141,11 +141,29 @@ Requires `TMDB_API_KEY` in `.env`. Inserts popular TV shows so recommendations a
 python scripts/ingest_tmdb.py
 ```
 
-Then (optional) generate embeddings for semantic search:
+Then (optional) generate embeddings for semantic search (uses same DB as FastAPI when run from project root with `.env`):
 
 ```powershell
 python scripts/generate_embeddings.py
 ```
+
+Use `--force` to regenerate all embeddings, or `--limit N` to process only N shows.
+
+### Verify show and embedding counts
+
+Check total rows and how many have embeddings (semantic search only uses rows with non-null `embedding`):
+
+```powershell
+docker exec -it moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*), COUNT(embedding) FROM shows;"
+```
+
+Or with a direct connection (e.g. `psql -U postgres -d moodflix`):
+
+```sql
+SELECT COUNT(*), COUNT(embedding) FROM shows;
+```
+
+If `COUNT(embedding)` is much smaller than `COUNT(*)`, run `python scripts/generate_embeddings.py` so recommendations with a search query return more than one result.
 
 ### If you see "Show not found" when adding by `show_id`
 

@@ -107,6 +107,18 @@ def recommend(
     When authenticated, age is inferred from the user's date_of_birth for content filtering.
     When unauthenticated, use guest_family_safe: True → age 17 (family filter), else age 18 (adult).
     """
+    logger.info(
+        "[recommend] request payload: query=%r, mood=%s, binge_preference=%s, preferred_genres=%s, "
+        "watching_context=%s, language_preference=%r, episode_length_preference=%s, guest_family_safe=%s",
+        getattr(input_data, "query", None),
+        getattr(input_data, "mood", None),
+        getattr(input_data, "binge_preference", None),
+        getattr(input_data, "preferred_genres", None),
+        getattr(input_data, "watching_context", None),
+        getattr(input_data, "language_preference", None),
+        getattr(input_data, "episode_length_preference", None),
+        getattr(input_data, "guest_family_safe", None),
+    )
     if current_user is not None:
         age = compute_age(current_user.date_of_birth)
     else:

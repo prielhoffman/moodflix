@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const SUPPORTED_GENRES = [
   "action",
@@ -35,9 +35,7 @@ const LANGUAGE_OPTIONS = [
   PreferenceForm collects the user's basic preferences
   and sends them to the parent component via onSubmit.
 */
-const MOOD_VALUES = ["chill", "happy", "familiar", "focused", "adrenaline", "dark", "curious"];
-
-function PreferenceForm({ onSubmit, syncedMood }) {
+function PreferenceForm({ onSubmit }) {
   // Form state: matches backend field names exactly (age removed - inferred from user's date_of_birth when authenticated)
   const [formData, setFormData] = useState({
     mood: "chill",
@@ -47,13 +45,6 @@ function PreferenceForm({ onSubmit, syncedMood }) {
     episode_length_preference: "any",
     watching_context: "alone",
   });
-
-  // Keep Mood dropdown in sync when user picks a Quick Mood (or last request had a different mood).
-  useEffect(() => {
-    if (syncedMood && typeof syncedMood === "string" && MOOD_VALUES.includes(syncedMood.toLowerCase())) {
-      setFormData((prev) => (prev.mood === syncedMood ? prev : { ...prev, mood: syncedMood.toLowerCase() }));
-    }
-  }, [syncedMood]);
 
   // Handle changes for all inputs
   function handleChange(event) {
@@ -83,8 +74,10 @@ function PreferenceForm({ onSubmit, syncedMood }) {
   function handleSubmit(event) {
     event.preventDefault();
 
-    // Prepare data for backend (no age - inferred from user's date_of_birth when authenticated)
+    // Prepare data for backend (no age - inferred from user's date_of_birth when authenticated).
+    // Form flow must NOT send a search query so /recommend uses full DB ranking, not semantic search.
     const preparedData = { ...formData };
+    preparedData.query = "";
 
     if (!preparedData.language_preference) {
       delete preparedData.language_preference;

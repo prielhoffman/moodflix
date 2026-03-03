@@ -506,5 +506,5 @@ SHOWS = [
 
 
 def get_all_shows():
-    """Return the full static list of TV shows."""
-    return SHOWS
+    """Return a copy of the static TV shows list. Callers may mutate entries; original SHOWS must stay immutable."""
+    return [dict(s) for s in SHOWS]

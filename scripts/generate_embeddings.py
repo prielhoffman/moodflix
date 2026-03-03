@@ -1,3 +1,8 @@
+"""
+Generate and store embeddings for shows in the same Postgres DB that FastAPI uses.
+Run from project root with the same .env so the script connects to the same database.
+Commits update shows.embedding for many rows.
+"""
 import argparse
 import sys
 from pathlib import Path

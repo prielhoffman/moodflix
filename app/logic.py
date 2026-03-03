@@ -23,6 +23,7 @@ from app.embeddings import EMBED_DIM, embed_text
 from app.models import Show
 from app.shared import TMDB_TV_GENRE_ID_TO_NAME, shorten_text
 from app import config
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,7 @@ _KIDS_TITLE_BLACKLIST = {
     "law & order",
     "grey's anatomy",
     "grey anatomy",
+    "greys anatomy",
     "csi:",
     "criminal minds",
     "ncis",
@@ -466,29 +468,104 @@ def recommend_shows(
     if candidate_top_k is None:
         candidate_top_k = config.DEFAULT_CANDIDATE_TOP_K
 
+    # Temporary debug: log inputs and which path will be used.
+    query_text = (user_input.query or "").strip()
+    logger.info(
+        "[recommend] recommend_shows input: query=%r (len=%d), top_n=%s, candidate_top_k=%s, mood=%s, "
+        "binge_preference=%s, preferred_genres=%s, watching_context=%s, language_preference=%r, episode_length_preference=%s",
+        user_input.query,
+        len(query_text),
+        top_n,
+        candidate_top_k,
+        getattr(user_input, "mood", None),
+        getattr(user_input, "binge_preference", None),
+        getattr(user_input, "preferred_genres", None),
+        getattr(user_input, "watching_context", None),
+        getattr(user_input, "language_preference", None),
+        getattr(user_input, "episode_length_preference", None),
+    )
+    logger.info("[recommend] query_text length=%d (0 => form flow, semantic path will NOT run)", len(query_text))
+
+    # (B) Prove how many rows the backend actually sees: raw COUNT and connection target.
+    if db is not None:
+        try:
+            total_shows = db.execute(text("SELECT COUNT(*) FROM shows")).scalar()
+            with_title = db.execute(text("SELECT COUNT(*) FROM shows WHERE title IS NOT NULL")).scalar()
+            logger.info("[recommend] DB raw: SELECT COUNT(*) FROM shows => %s; WITH title IS NOT NULL => %s", total_shows, with_title)
+            try:
+                url = db.get_bind().url
+                logger.info(
+                    "[recommend] DB connection target: host=%r database=%r (password masked)",
+                    url.host,
+                    url.database,
+                )
+            except Exception as e:
+                logger.warning("[recommend] Could not log DB connection target: %s", e)
+        except Exception as e:
+            logger.warning("[recommend] DB raw COUNT failed: %s", e)
+
     # Unauthenticated: use 18 (adult) so we don't restrict content by age.
     user_age = age if age is not None else 18
 
     shows: list[dict] = []
+    source_path: str = "fallback"
 
-    query_text = user_input.query.strip() if user_input.query else ""
     if query_text and db is not None:
+        source_path = "semantic"
         try:
             query_vec = embed_text(query_text)
             candidate_rows = _fetch_candidate_rows(db, query_vec, candidate_top_k)
             shows = _load_shows_from_rows(candidate_rows)
+            # Debug: DB total vs semantic-search candidates (only shows with non-null embedding are candidates).
+            db_total = db.query(Show).count()
+            db_with_embedding = db.query(Show).filter(Show.embedding.isnot(None)).count()
+            logger.info(
+                "[recommend] source=db+semantic: total_db_shows=%d, db_shows_with_embedding=%d, candidate_top_k=%d, candidates_returned=%d",
+                db_total,
+                db_with_embedding,
+                candidate_top_k,
+                len(shows),
+            )
+            # Robust fallback: if embeddings are scarce or semantic returned too few, use full DB scan so we still return top_n.
+            if db_with_embedding < config.SEMANTIC_MIN_EMBEDDINGS or len(shows) < int(top_n):
+                logger.info(
+                    "[recommend] semantic fallback: insufficient embeddings or candidates (have_embedding=%d, candidates=%d, top_n=%d); using full DB scan.",
+                    db_with_embedding,
+                    len(shows),
+                    top_n,
+                )
+                source_path = "db_full_scan"
+                try:
+                    shows = _load_shows_from_db(db)
+                    logger.info("[recommend] _load_shows_from_db returned len(shows)=%d", len(shows))
+                except Exception:
+                    shows = []
+                if not shows:
+                    shows = get_all_shows()
+                    source_path = "fallback"
+                    logger.info("[recommend] fallback: using static dataset, size=%d", len(shows))
+                else:
+                    logger.info("[recommend] fallback: full DB scan pool size=%d", len(shows))
         except Exception:
             shows = []
     else:
         if db is not None:
             try:
                 shows = _load_shows_from_db(db)
+                source_path = "db_full_scan"
+                logger.info("[recommend] source=db_full_scan: _load_shows_from_db returned len(shows)=%d", len(shows))
             except Exception:
-                # Best-effort fallback: recommendations should still work even if DB is down.
                 shows = []
+                logger.warning("[recommend] source=db: load failed, using fallback")
+            if not shows:
+                source_path = "fallback"
 
     if not shows:
         shows = get_all_shows()
+        source_path = "fallback"
+        logger.info("[recommend] source=fallback: total_fallback_shows=%d", len(shows))
+
+    logger.info("[recommend] CHOSEN PATH=%s, candidate pool size=%d (top_n=%s)", source_path, len(shows), top_n)
 
     # When using static data, resolve internal DB id by title so watchlist add works.
     if db and shows:
@@ -514,6 +591,25 @@ def recommend_shows(
     wants_reality = "reality" in user_genres
     candidate_items: list[dict] = []
 
+    # (D) Rejection counters to find which filter collapses the pool.
+    rej = {
+        "zero_trust_rating": 0,
+        "adult_rating": 0,
+        "kids_adult_genre": 0,
+        "kids_keywords": 0,
+        "kids_title_blacklist": 0,
+        "kids_safety_filter": 0,
+        "family_unsafe_genre": 0,
+        "exclude_kids_genre": 0,
+        "binge": 0,
+        "episode_length": 0,
+        "language": 0,
+        "genre_strict": 0,
+        "reality": 0,
+    }
+
+    logger.info("[recommend] candidates_before_filtering=%d (top_n=%d)", len(shows), top_n)
+
     for show in shows:
         # ---------- Hard filters ----------
 
@@ -528,61 +624,75 @@ def recommend_shows(
             # Zero-trust: only allow shows with an explicit rating in _FAMILY_SAFE_RATINGS.
             title = show.get("title") or "Unknown"
             if not rating or rating not in _FAMILY_SAFE_RATINGS:
+                rej["zero_trust_rating"] += 1
                 logger.info("Blocking [%s] because rating is missing or not family-safe.", title)
                 continue
             logger.info("Allowing [%s] with rating [%s].", title, rating)
         else:
             # Non-family: block adult ratings below configured age.
             if rating and rating in _ADULT_RATINGS and effective_max_age < config.ADULT_RATING_MIN_AGE:
+                rej["adult_rating"] += 1
                 continue
 
         show_genres = {g.lower() for g in _coerce_genres(show.get("genres", []))}
 
         # Kids/Family: block by TMDB genre IDs (DB stores IDs; static may use names).
         if is_kids_or_family and _genres_contain_adult_ids(show.get("genres", [])):
+            rej["kids_adult_genre"] += 1
             continue
 
         # Kids/Family: block by keywords in title or overview.
         if is_kids_or_family:
             if _text_contains_blocked_keywords(show.get("title")):
+                rej["kids_keywords"] += 1
                 continue
             if _text_contains_blocked_keywords(show.get("overview") or show.get("tmdb_overview")):
+                rej["kids_keywords"] += 1
                 continue
 
         # Kids/Family: hard-coded title blacklist (Law & Order, Grey's Anatomy, etc.).
         if is_kids_or_family and _title_in_kids_blacklist(show.get("title")):
+            rej["kids_title_blacklist"] += 1
             continue
 
         # Kids/Family safety filter: must have Family/Kids/Animation, or Documentary/Comedy without Drama/Crime.
         if is_kids_or_family and not _show_passes_kids_safety_filter(show.get("genres", [])):
+            rej["kids_safety_filter"] += 1
             continue
 
         # Family context: exclude crime, horror, thriller, true crime, war (by name).
         if is_family_context and (show_genres & _FAMILY_UNSAFE_GENRES):
+            rej["family_unsafe_genre"] += 1
             continue
         if user_age >= config.EXCLUDE_KIDS_GENRE_MIN_AGE and not kids_intent:
             if show_genres & _KIDS_GENRES:
+                rej["exclude_kids_genre"] += 1
                 continue
 
         seasons = show.get("number_of_seasons")
         if seasons is not None:
             if user_input.binge_preference == BingePreference.SHORT_SERIES and seasons > config.SHORT_SERIES_MAX_SEASONS:
+                rej["binge"] += 1
                 continue
             if user_input.binge_preference == BingePreference.BINGE and seasons <= config.BINGE_MIN_SEASONS:
+                rej["binge"] += 1
                 continue
 
         episode_length = show.get("average_episode_length")
         if user_input.episode_length_preference == EpisodeLengthPreference.SHORT:
             if episode_length is not None and episode_length > config.SHORT_EPISODE_MAX_MINUTES:
+                rej["episode_length"] += 1
                 continue
         if user_input.episode_length_preference == EpisodeLengthPreference.LONG:
             if episode_length is not None and episode_length <= config.LONG_EPISODE_MIN_MINUTES:
+                rej["episode_length"] += 1
                 continue
 
         if user_input.language_preference:
             show_language = _normalize_lang(show.get("language") or show.get("original_language"))
             preferred_lang = _normalize_lang(user_input.language_preference)
             if show_language and preferred_lang and show_language != preferred_lang:
+                rej["language"] += 1
                 continue
 
         common_genres = user_genres & show_genres
@@ -590,14 +700,17 @@ def recommend_shows(
         # Strict genre enforcement:
         # if user selected genres, candidate must match at least one.
         if user_genres and not common_genres:
+            rej["genre_strict"] += 1
             continue
 
         # If reality is requested, enforce actual reality content
         # (exclude talk/variety-only matches).
         if wants_reality:
             if "reality" not in show_genres:
+                rej["reality"] += 1
                 continue
             if (show_genres & _LOW_PRIORITY_GENRES) and "reality" not in show_genres:
+                rej["reality"] += 1
                 continue
 
         mood_genres = _MOOD_GENRE_MAP.get(user_input.mood, set())
@@ -622,6 +735,14 @@ def recommend_shows(
                 "recommendation_reason": recommendation_reason,
             }
         )
+
+    logger.info(
+        "[recommend] candidates_after_filtering=%d | rejection counts: %s",
+        len(candidate_items),
+        {k: v for k, v in rej.items() if v > 0},
+    )
+    if sum(rej.values()) > 0:
+        logger.info("[recommend] total rejected=%d", sum(rej.values()))
 
     # Family context: debug small pool and ensure minimum results via relaxed fallback.
     if is_family_context and len(candidate_items) < config.FAMILY_MIN_RESULTS:
@@ -1079,4 +1200,5 @@ def recommend_shows(
         if family_only:
             logger.info("Kids/Family: filled remaining slots with Family-genre fallback (used %d of %d).", min(need, len(family_only)), len(family_only))
 
+    logger.info("[recommend] final_result_count=%d (requested top_n=%d)", len(outputs), top_n)
     return outputs

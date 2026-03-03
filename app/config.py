@@ -8,6 +8,9 @@ the main recommendation logic. All numeric tuning is centralized here.
 # --------------------------------- Recommendation defaults ---------------------------------
 DEFAULT_TOP_N = 20
 DEFAULT_CANDIDATE_TOP_K = 80
+# When a request has a query, semantic search is used only if at least this many shows have embeddings.
+# If below this (or semantic returns fewer than top_n candidates), we fall back to full DB scan / static fallback.
+SEMANTIC_MIN_EMBEDDINGS = 50
 
 # --------------------------------- Age thresholds ---------------------------------
 # When watching with family, treat effective max age as this for rating rules.
@@ -22,8 +25,9 @@ EXCLUDE_KIDS_GENRE_MIN_AGE = 21
 # --------------------------------- Binge / series length ---------------------------------
 # Short series: allow at most this many seasons.
 SHORT_SERIES_MAX_SEASONS = 3
-# Binge: require more than this many seasons.
-BINGE_MIN_SEASONS = 3
+# Binge: require more than this many seasons (so 3+ seasons pass when this is 2).
+# Was 3 (only 4+ passed); many TMDB shows have 1–3 seasons, so form flow collapsed to 1 result.
+BINGE_MIN_SEASONS = 2
 
 # --------------------------------- Episode length (minutes) ---------------------------------
 # Short episodes: max length in minutes.

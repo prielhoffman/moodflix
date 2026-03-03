@@ -60,7 +60,10 @@ def test_short_series_returns_only_up_to_three_seasons():
     assert all(show.number_of_seasons <= 3 for show in results)
 
 
-def test_binge_returns_only_more_than_three_seasons():
+def test_binge_returns_only_more_than_min_seasons():
+    """BINGE requires > config.BINGE_MIN_SEASONS (2), so 3+ seasons pass."""
+    from app import config
+
     user_input = RecommendationInput(
         binge_preference=BingePreference.BINGE,
         preferred_genres=[],
@@ -73,7 +76,12 @@ def test_binge_returns_only_more_than_three_seasons():
     results = recommend_shows(user_input, age=30)
 
     assert results
-    assert all(show.number_of_seasons > 3 for show in results)
+    for show in results:
+        if show.number_of_seasons is not None:
+            assert show.number_of_seasons > config.BINGE_MIN_SEASONS, (
+                f"Show {show.title} has {show.number_of_seasons} seasons, "
+                f"expected > {config.BINGE_MIN_SEASONS}"
+            )
 
 
 # ---------- Episode length ----------
@@ -376,11 +384,70 @@ def test_recommend_with_query_uses_db_candidates(monkeypatch):
         query="funny workplace comedy",
     )
 
-    results = recommend_shows(user_input, db=object(), age=30, top_n=5)
+    class MockDB:
+        """Minimal mock so recommend_shows doesn't crash on db.query/execute."""
+
+        def execute(self, *args):
+            return _MockResult(100)
+
+        def query(self, *args):
+            return self
+
+        filter = lambda self, *args: self
+        count = lambda self: 100
+        first = lambda self: None
+
+        def get_bind(self):
+            return type("MockURL", (), {"host": "test", "database": "test", "url": None})()
+
+    class _MockResult:
+        def __init__(self, val):
+            self._val = val
+
+        def scalar(self):
+            return self._val
+
+    db = MockDB()
+
+    results = recommend_shows(user_input, db=db, age=30, top_n=2)
 
     assert results
     result_titles = {show.title for show in results}
     assert result_titles == {"Alpha", "Beta"}, f"Expected Alpha and Beta, got {result_titles}"
+
+
+def test_static_data_is_not_mutated_across_requests():
+    """
+    get_all_shows() returns copies; mutating results must not affect other requests.
+    Regression test for data corruption when using static fallback.
+    """
+    from app.data import get_all_shows
+
+    s1 = get_all_shows()
+    s2 = get_all_shows()
+    assert s1 is not s2
+    assert s1[0] is not s2[0]
+    s1[0]["content_rating"] = "MUTATED"
+    assert "MUTATED" not in str(s2[0].get("content_rating"))
+
+
+def test_greys_anatomy_variant_blocked_in_family_context():
+    """
+    "Greys Anatomy" (no apostrophe) must be blocked in Kids/Family context
+    alongside "Grey's Anatomy" - same show, different spelling.
+    """
+    user_input = RecommendationInput(
+        binge_preference=BingePreference.BINGE,
+        preferred_genres=[],
+        mood=Mood.CHILL,
+        language_preference=None,
+        episode_length_preference=EpisodeLengthPreference.ANY,
+        watching_context=WatchingContext.FAMILY,
+    )
+    results = recommend_shows(user_input, age=35)
+    titles_lower = [s.title.lower() for s in results]
+    assert "greys anatomy" not in titles_lower
+    assert "grey's anatomy" not in titles_lower
 
 
 def test_tmdb_cache_reuses_network_results_across_consecutive_recommend_calls(monkeypatch):

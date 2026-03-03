@@ -341,7 +341,6 @@ function scrollCarousel(direction) {
                   onQuickRecommend={handleQuickRecommend}
                   isLoading={isLoading}
                   onSubmitPreferences={handleFormSubmit}
-                  syncedMood={lastRecommendationInput?.mood}
                   error={error}
                   recommendations={recommendations}
                   carouselRef={carouselRef}
@@ -357,11 +356,8 @@ function scrollCarousel(direction) {
               path="/recommend"
               element={
                 <RecommendPage
-                  authUser={authUser}
-                  onQuickRecommend={handleQuickRecommend}
                   onSubmitPreferences={handleFormSubmit}
                   isLoading={isLoading}
-                  syncedMood={lastRecommendationInput?.mood}
                   error={error}
                   recommendations={recommendations}
                   carouselRef={carouselRef}

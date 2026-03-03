@@ -8,7 +8,7 @@ This module provides:
 
 import os
 import warnings
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import jwt, JWTError
@@ -25,7 +25,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # JWT Configuration from environment variables
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+_raw_expire = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+try:
+    ACCESS_TOKEN_EXPIRE_MINUTES = max(1, int(_raw_expire))
+except (TypeError, ValueError):
+    ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Production environment detection: check explicit ENV or APP_ENV variables
 # Treat "production" or "prod" (case-insensitive) as production environment
@@ -55,7 +59,6 @@ def hash_password(plain: str) -> str:
     Returns:
         Hashed password string
     """
-    print(f"DEBUG: Password length is {len(plain)}")
     password_bytes = plain.encode("utf-8")[:72]
     return pwd_context.hash(password_bytes.decode("utf-8", errors="ignore"))
 
@@ -94,7 +97,7 @@ def create_access_token(data: dict, expires_minutes: Optional[int] = None) -> st
     if expires_minutes is None:
         expires_minutes = ACCESS_TOKEN_EXPIRE_MINUTES
 
-    expire = datetime.utcnow() + timedelta(minutes=expires_minutes)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
     to_encode.update({"exp": expire})
 
     # Encode and return token

@@ -106,7 +106,6 @@ def add_to_watchlist(
         request_payload,
         current_user.id,
     )
-    print(f"[watchlist/add] payload={request_payload} user_id={current_user.id}")
 
     try:
         show = None
@@ -159,9 +158,18 @@ def add_to_watchlist(
         return {"watchlist": _serialize_watchlist(items)}
     except AppException:
         raise
+    except IntegrityError:
+        db.rollback()
+        items = (
+            db.query(WatchlistItem)
+            .options(joinedload(WatchlistItem.show))
+            .filter(WatchlistItem.user_id == current_user.id)
+            .order_by(WatchlistItem.created_at.desc())
+            .all()
+        )
+        return {"watchlist": _serialize_watchlist(items)}
     except Exception as e:
         logger.exception("watchlist/add: unexpected error payload=%s user_id=%s", request_payload, current_user.id)
-        print(f"[watchlist/add] EXCEPTION: {type(e).__name__}: {e}")
         raise
 
 

@@ -1,17 +1,8 @@
 import PreferenceForm from "../components/PreferenceForm";
 
-const QUICK_MOODS = [
-  { id: "chill", label: "😌 Chill", value: "chill" },
-  { id: "adrenaline", label: "📈 Adrenaline", value: "adrenaline" },
-  { id: "dark", label: "🌑 Dark", value: "dark" },
-];
-
 function RecommendPage({
-  authUser,
-  onQuickRecommend,
   onSubmitPreferences,
   isLoading,
-  syncedMood,
   error,
   recommendations,
   carouselRef,
@@ -23,26 +14,8 @@ function RecommendPage({
   return (
     <section className="content-section">
       <div className="content-wrapper">
-        {authUser && (
-          <div className="home-quick-moods-row">
-            <span className="home-moods-label">Quick mood:</span>
-            <div className="home-moods-buttons">
-              {QUICK_MOODS.map(({ id, label, value }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className="home-mood-btn"
-                  onClick={() => onQuickRecommend({ mood: value })}
-                  disabled={isLoading}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <div className="preferences-box">
-          <PreferenceForm onSubmit={onSubmitPreferences} syncedMood={syncedMood} />
+          <PreferenceForm onSubmit={onSubmitPreferences} />
         </div>
 
         {isLoading && (
