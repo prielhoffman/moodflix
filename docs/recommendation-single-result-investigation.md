@@ -1,6 +1,6 @@
 # Recommendation pipeline: why only one result is returned
 
-**Note:** A fix was applied (see [REGRESSION-ANALYSIS-SINGLE-RECOMMENDATION.md](REGRESSION-ANALYSIS-SINGLE-RECOMMENDATION.md)): when the DB has fewer than 50 rows, the system now uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (e.g. 1 row from watchlist add-by-title).
+**Note:** A fix was applied so that when the DB has fewer than 50 rows, the system now uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (for example, when only 1 row exists from a watchlist add-by-title flow).
 
 ## Diagnostics (form flow: only 1 recommendation)
 
