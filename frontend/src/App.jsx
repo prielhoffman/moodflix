@@ -6,7 +6,7 @@ import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import Header from "./components/Header";
 import AuthModal from "./components/modals/AuthModal";
 import UserInfoModal from "./components/modals/UserInfoModal";
-import HomePage from "./pages/HomePage";
+import GuestLanding from "./components/GuestLanding";
 import RecommendPage from "./pages/RecommendPage";
 import SearchPage from "./pages/SearchPage";
 import WatchlistPage from "./pages/WatchlistPage";
@@ -336,19 +336,25 @@ function scrollCarousel(direction) {
             <Route
               path="/"
               element={
-                <HomePage
-                  authUser={authUser}
-                  onQuickRecommend={handleQuickRecommend}
-                  isLoading={isLoading}
-                  onSubmitPreferences={handleFormSubmit}
-                  error={error}
-                  recommendations={recommendations}
-                  carouselRef={carouselRef}
-                  onScrollCarousel={scrollCarousel}
-                  isSaved={isSaved}
-                  onToggleSave={toggleSave}
-                  savingTitle={savingTitle}
-                />
+                authUser ? (
+                  <RecommendPage
+                    onSubmitPreferences={handleFormSubmit}
+                    isLoading={isLoading}
+                    error={error}
+                    recommendations={recommendations}
+                    carouselRef={carouselRef}
+                    onScrollCarousel={scrollCarousel}
+                    isSaved={isSaved}
+                    onToggleSave={toggleSave}
+                    savingTitle={savingTitle}
+                  />
+                ) : (
+                  <GuestLanding
+                    onQuickRecommend={handleQuickRecommend}
+                    isLoading={isLoading}
+                    error={error}
+                  />
+                )
               }
             />
 
