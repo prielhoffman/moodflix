@@ -28,7 +28,7 @@
 - **Bug:** `get_all_shows()` returned a reference to the module-level `SHOWS` list. Callers mutated entries (e.g. `show["content_rating"] = rating`, `show["id"] = row.id`), corrupting shared state across requests.
 - **Location:** `app/data.py` `get_all_shows()`, `app/logic.py` (mutating show dicts).
 - **Root cause:** No copy on return; callers assumed they could mutate.
-- **When:** Any request using static fallback (empty DB or semantic fallback).
+- **When:** Any request using static fallback (empty DB, under-seeded &lt;50 rows, or semantic fallback).
 
 **Impact**
 - Data integrity: static catalog could be permanently altered.

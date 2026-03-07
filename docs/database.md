@@ -125,7 +125,7 @@ After any model change, add a new migration with `alembic revision --autogenerat
 
 ## 5. Verify and seed the `shows` table
 
-Recommendations can come from the **static fallback** when the `shows` table is empty. **Watchlist Save** still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` first.
+Recommendations use the **static fallback** when the `shows` table is **empty or under-seeded** (fewer than 50 rows). This ensures a sufficient candidate pool for scoring; otherwise a DB with 1–2 rows (e.g. from watchlist add-by-title) would return only 1–2 recommendations. **Watchlist Save** still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` with at least 50 rows (200+ recommended for production-like behavior).
 
 ### Check if `shows` has rows
 
@@ -135,13 +135,17 @@ docker exec -it moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FRO
 
 ### Seed `shows` from TMDB (optional)
 
-Requires `TMDB_API_KEY` in `.env`. Inserts popular TV shows so recommendations and watchlist can use DB-backed `show_id`:
+Requires `TMDB_API_KEY` in `.env`. The ingest script fetches popular TV shows from TMDB and inserts them into `shows`:
 
 ```powershell
 python scripts/ingest_tmdb.py
 ```
 
-Then (optional) generate embeddings for semantic search (uses same DB as FastAPI when run from project root with `.env`):
+- **TMDB_API_KEY** is required (get a free key from [themoviedb.org](https://www.themoviedb.org/settings/api)).
+- **TMDB_PAGES** in `.env` controls how many pages to fetch (default 2 ≈ 40 shows; use 5+ for 100+, 10 for 200+).
+- Run from project root with venv activated; the script uses the same DB connection as the backend.
+
+Then (optional) generate embeddings for semantic search:
 
 ```powershell
 python scripts/generate_embeddings.py

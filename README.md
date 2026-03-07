@@ -10,6 +10,8 @@ An **AI layer** provides **local embeddings** (sentence-transformers) stored in 
 
 - **Planning & design decisions:** [docs/PLANNING.md](docs/PLANNING.md)
 - **Local setup guide (Windows):** [docs/setup.md](docs/setup.md)
+- **Database migrations & seeding:** [docs/database.md](docs/database.md)
+- **Recommendation pipeline diagnostics:** [docs/recommendation-single-result-investigation.md](docs/recommendation-single-result-investigation.md)
 
 ---
 
@@ -66,7 +68,7 @@ flowchart TB
   - `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required)
   - Watchlist items reference the `shows` table via `show_id` (FK); add/remove by `show_id` (title supported for legacy/remove)
 - **DB‑backed shows**
-  - Recommendations prefer the `shows` table in Postgres (fallback to `app/data.py` if DB is empty)
+  - Recommendations prefer the `shows` table in Postgres (fallback to static catalog when DB is empty or under-seeded; see [Recommendation pipeline](#recommendation-pipeline))
   - `shows` stores TMDB metadata (content_rating, number_of_seasons, average_episode_length, original_language) for faster reads and fewer API calls
 - **Optional TMDB enrichment (write-through cache)**
   - When `TMDB_API_KEY` is set, posters/ratings/overviews/dates are fetched from TMDB and **persisted to the DB** (write-through cache)
@@ -80,6 +82,21 @@ flowchart TB
   - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
 - **Graceful handling of missing API keys**
   - Server starts without `TMDB_API_KEY`
+
+---
+
+## Recommendation pipeline
+
+The recommendation system uses one of two data sources:
+
+| Condition | Data source | Behavior |
+|-----------|-------------|----------|
+| DB has **≥ 50 shows** | PostgreSQL `shows` table | Recommendations are generated from the database (DB-backed). |
+| DB has **< 50 shows** (or empty) | Static catalog (`app/data.py`) | Fallback ensures a sufficient candidate pool (~50 shows) so you get up to `top_n` results instead of 1. |
+
+**Why the threshold?** When the DB has only a few rows (e.g. 1 from a watchlist add-by-title), using it directly would return at most that many recommendations. The fallback guarantees a diverse pool for scoring and filtering.
+
+**Seeding the database:** To get DB-backed recommendations, seed `shows` with at least 50 rows (200+ recommended for production-like behavior). Use `scripts/ingest_tmdb.py` (requires `TMDB_API_KEY` in `.env`). See [Seeding the database](#seeding-the-database).
 
 ---
 
@@ -259,7 +276,31 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 TMDB_API_KEY=your_tmdb_key
 ```
 
-If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`).
+If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`). **Required for seeding:** `scripts/ingest_tmdb.py` needs `TMDB_API_KEY` in `.env` to populate the `shows` table.
+
+### Seeding the database
+
+To get DB-backed recommendations (instead of the static fallback), seed the `shows` table:
+
+1. Set `TMDB_API_KEY` in `.env` (get a free key from [themoviedb.org](https://www.themoviedb.org/settings/api)).
+2. Run the ingest script:
+
+   ```powershell
+   python scripts/ingest_tmdb.py
+   ```
+
+3. (Optional) Increase `TMDB_PAGES` in `.env` for more shows (default 2 ≈ 40 shows; use 5+ for 100+ shows, 10 for 200+).
+4. Generate embeddings for semantic search: `python scripts/generate_embeddings.py`
+
+**Quick verification:**
+
+```powershell
+# Check show count
+docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
+
+# Check show + embedding counts (semantic search uses rows with embedding)
+docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*), COUNT(embedding) FROM shows;"
+```
 
 ## Demo without TMDB
 
@@ -269,7 +310,7 @@ You can demo recommendations without TMDB and without seeded Postgres content:
 - Start the backend normally.
 - Call `POST /recommend`.
 
-When the `shows` table is empty (or DB is unavailable), the app falls back to a curated static dataset in `app/data.py` with diverse genres, languages, content ratings, season counts, and episode lengths.
+When the `shows` table is empty or under-seeded (< 50 rows), the app falls back to a curated static dataset in `app/data.py` with diverse genres, languages, content ratings, season counts, and episode lengths.
 
 Example payloads that should return multiple recommendations from fallback data:
 

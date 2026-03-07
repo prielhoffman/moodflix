@@ -1,5 +1,7 @@
 # Recommendation pipeline: why only one result is returned
 
+**Note:** A fix was applied (see [REGRESSION-ANALYSIS-SINGLE-RECOMMENDATION.md](REGRESSION-ANALYSIS-SINGLE-RECOMMENDATION.md)): when the DB has fewer than 50 rows, the system now uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (e.g. 1 row from watchlist add-by-title).
+
 ## Diagnostics (form flow: only 1 recommendation)
 
 After submitting the recommendations form, check server logs for these lines to find the exact bottleneck:
@@ -9,7 +11,7 @@ After submitting the recommendations form, check server logs for these lines to 
    - `CHOSEN PATH=db_full_scan` or `fallback` → correct for form flow.
 
 2. **DB and load**
-   - `DB raw: SELECT COUNT(*) FROM shows => N` → backend sees N rows. If N is 1, the app is likely connected to a different DB than the one you seeded (check `DB connection target: host=... database=...` and your `.env`).
+   - `DB raw: SELECT COUNT(*) FROM shows => N` → backend sees N rows. If N < 50, the under-seeded fallback should kick in (static catalog). If N is 1 and you still get only 1 result, the fix may not be applied, or the app is connected to a different DB (check `DB connection target: host=... database=...` and your `.env`).
    - `_load_shows_from_db returned len(shows)=N` → candidate pool size before filtering. If this is 1 but raw COUNT is large, there is a bug in `_load_shows_from_db` (it has no `.limit()`; inspect if needed).
 
 3. **Filtering**
@@ -29,15 +31,17 @@ After submitting the recommendations form, check server logs for these lines to 
   - The query is embedded and **semantic search** runs: `_fetch_candidate_rows(db, query_vec, candidate_top_k)`.
   - That function returns **only** rows where `Show.embedding.isnot(None)`, ordered by cosine distance, **limit `candidate_top_k`** (default 80).
   - So the candidate pool is **at most 80 shows that have a non-null embedding**. If the DB has many rows but only one (or few) have embeddings populated, the pool is 1 (or very small) **before any filtering**.
+  - **Fallback:** If `db_with_embedding < SEMANTIC_MIN_EMBEDDINGS` (50) or semantic returns fewer than `top_n` candidates, we fall back to full DB scan; if that yields nothing, we use static fallback.
 
 - **When there is no `query`** (e.g. preference form "Get recommendations"):
   - We load **all** shows from the DB: `_load_shows_from_db(db)` (no embedding filter).
-  - So the candidate pool is the full `shows` table.
+  - **Under-seeded fallback:** If the DB has **fewer than 50 rows** (`SEMANTIC_MIN_EMBEDDINGS`), we use the static dataset instead. This prevents the "1 result" bug when the DB has only 1–2 rows (e.g. from watchlist add-by-title).
+  - So the candidate pool is either the full `shows` table (when ≥ 50 rows) or the static dataset (~50 shows).
 
-- **Fallback**:
-  - If the candidate list is empty (DB error or no rows), we use the static dataset: `get_all_shows()` (~50–100 shows).
+- **Fallback** (general):
+  - If the candidate list is empty (DB error, no rows, or under-seeded), we use the static dataset: `get_all_shows()` (~50–100 shows).
 
-So: **DB vs fallback** is “DB when we have rows (either from semantic search or full load), else static fallback”. The critical distinction is **with-query** (semantic, embedding-limited) vs **no-query** (full DB load).
+So: **DB vs fallback** is “DB when we have enough rows (≥ 50 for form flow; sufficient embeddings for semantic path), else static fallback”. The critical distinction is **with-query** (semantic, embedding-limited) vs **no-query** (full DB load with under-seeded check).
 
 ---
 

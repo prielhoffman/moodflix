@@ -138,8 +138,10 @@ python scripts/ingest_tmdb.py
 
 # Verify
 docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
-# Expect 40+ (2 pages × 20 per page)
+# Expect 40+ (TMDB_PAGES=2) or 200+ (TMDB_PAGES=10). Need ≥ 50 for DB-backed recommendations.
 ```
+
+See [docs/database.md](database.md) and [README.md](../README.md#seeding-the-database) for full seeding workflow.
 
 ### D) Run tests
 
@@ -156,4 +158,4 @@ pytest tests/test_logic.py -v -k "family_context or binge or static_data"
 | **Root cause** | DB has 1 row (from watchlist add-by-title). Form flow uses DB when non-empty; 1 row → 1 result. |
 | **Faulty commit** | `542ff20` (introduced create-on-add; exposed missing under-seeded fallback) |
 | **Fix** | Use static fallback when DB has &lt; 50 rows in form flow |
-| **Seeding** | Run `ingest_tmdb.py` for 200+ shows; optional for form flow after fix |
+| **Seeding** | Run `scripts/ingest_tmdb.py` (requires `TMDB_API_KEY`); use `TMDB_PAGES=10` for 200+ shows. Optional for form flow after fix (static fallback when &lt; 50 rows). |

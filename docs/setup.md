@@ -209,7 +209,8 @@ pip install -r requirements.txt
    **No change to `app/db.py` is required.** It already reads these variables and defaults to `127.0.0.1:5432` with user `postgres`, database `moodflix` when running locally. If you leave `POSTGRES_*` unset and use a local host, `app/db.py` uses empty password by default; if you set a password during install (recommended), you must set `POSTGRES_PASSWORD` in `.env`.
 
 3. Other options in `.env`:
-   - Add your TMDB API key if you use TMDB features.
+   - **TMDB_API_KEY** – Required for seeding the database with `scripts/ingest_tmdb.py`. Get a free key from [themoviedb.org](https://www.themoviedb.org/settings/api). Optional for runtime: the backend starts without it, but TMDB enrichment (posters, ratings) will be disabled.
+   - **TMDB_PAGES** – Number of TMDB pages to fetch when seeding (default 2 ≈ 40 shows; increase for 100+ or 200+ shows).
    - See `.env.example` for all available options.
 
 ---
@@ -335,6 +336,23 @@ pytest
 # Run tests with verbose output
 pytest -v
 ```
+
+### Seeding the database (optional)
+
+To get DB-backed recommendations instead of the static fallback:
+
+```powershell
+# 1. Set TMDB_API_KEY in .env, then:
+python scripts/ingest_tmdb.py
+
+# 2. Verify show count (see docs/database.md for Docker vs local Postgres commands)
+docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
+
+# 3. Generate embeddings for semantic search
+python scripts/generate_embeddings.py
+```
+
+See [docs/database.md](database.md) for details. If the DB has fewer than 50 shows, recommendations use the static fallback automatically.
 
 ---
 
