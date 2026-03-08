@@ -8,9 +8,6 @@ function GuestLanding({
   recommendations,
   carouselRef,
   onScrollCarousel,
-  isSaved,
-  onToggleSave,
-  savingTitle,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [guestOver18, setGuestOver18] = useState(false);
@@ -110,19 +107,8 @@ function GuestLanding({
               </button>
 
               <div className="carousel-container" ref={carouselRef}>
-                {recommendations.map((show, i) => {
-                  const saved = isSaved(show.title);
-
-                  return (
+                {recommendations.map((show, i) => (
                     <div key={i} className="poster-card">
-                      <button
-                        className={`save-button ${saved ? "saved" : ""}`}
-                        onClick={() => onToggleSave(show)}
-                        disabled={savingTitle === show.title}
-                      >
-                        {saved ? "❤️ Saved" : "♡ Save"}
-                      </button>
-
                       {show.poster_url ? (
                         <img
                           src={show.poster_url}
@@ -164,8 +150,7 @@ function GuestLanding({
                         )}
                       </div>
                     </div>
-                  );
-                })}
+                ))}
               </div>
 
               <button className="carousel-arrow" onClick={() => onScrollCarousel("right")}>

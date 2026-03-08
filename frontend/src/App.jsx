@@ -416,9 +416,6 @@ function scrollCarousel(direction) {
                     recommendations={recommendations}
                     carouselRef={carouselRef}
                     onScrollCarousel={scrollCarousel}
-                    isSaved={isSaved}
-                    onToggleSave={toggleSave}
-                    savingTitle={savingTitle}
                   />
                 )
               }
