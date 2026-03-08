@@ -171,6 +171,33 @@ body {
   cursor: not-allowed;
 }
 
+.guest-mood-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.guest-mood-buttons .mood-button {
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.2);
+  border: 1px solid #6366f1;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.guest-mood-buttons .mood-button:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+.guest-mood-buttons .mood-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .home-age-toggle {
   margin-top: 1.5rem;
   padding: 1rem;

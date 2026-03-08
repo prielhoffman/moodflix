@@ -147,6 +147,32 @@ function App() {
     }
   }
 
+  /** Guest mood buttons: POST /recommend → 5 results, stay on /. */
+  async function handleGuestMood(mood, guestFamilySafe) {
+    setIsLoading(true);
+    setError(null);
+    setRecommendations([]);
+    const payload = {
+      mood: mood || "chill",
+      binge_preference: "binge",
+      preferred_genres: [],
+      episode_length_preference: "any",
+      watching_context: "alone",
+      guest_family_safe: guestFamilySafe !== false,
+    };
+    try {
+      const results = await recommendShows(payload);
+      const arr = Array.isArray(results) ? results : [];
+      setRecommendations(arr.slice(0, 5));
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
+      setRecommendations([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   /** Home quick flow: mood or search query → POST /recommend → navigate to /recommend with results. */
   async function handleQuickRecommend({ mood, query, guestFamilySafe }) {
     setIsLoading(true);
@@ -384,6 +410,7 @@ function scrollCarousel(direction) {
                 ) : (
                   <GuestLanding
                     onGuestSearch={handleGuestSearch}
+                    onGuestMood={handleGuestMood}
                     isLoading={isLoading}
                     error={error}
                     recommendations={recommendations}

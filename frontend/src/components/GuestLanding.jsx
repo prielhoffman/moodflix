@@ -2,6 +2,7 @@ import { useState } from "react";
 
 function GuestLanding({
   onGuestSearch,
+  onGuestMood,
   isLoading,
   error,
   recommendations,
@@ -12,6 +13,9 @@ function GuestLanding({
   savingTitle,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [guestOver18, setGuestOver18] = useState(false);
+
+  const guestFamilySafe = !guestOver18;
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -47,6 +51,48 @@ function GuestLanding({
             {isLoading ? "Finding…" : "Find shows"}
           </button>
         </form>
+
+        <div className="guest-mood-buttons">
+          <button
+            type="button"
+            className="mood-button"
+            onClick={() => onGuestMood("chill", guestFamilySafe)}
+            disabled={isLoading}
+          >
+            Chill
+          </button>
+          <button
+            type="button"
+            className="mood-button"
+            onClick={() => onGuestMood("adrenaline", guestFamilySafe)}
+            disabled={isLoading}
+          >
+            Adrenaline
+          </button>
+          <button
+            type="button"
+            className="mood-button"
+            onClick={() => onGuestMood("curious", guestFamilySafe)}
+            disabled={isLoading}
+          >
+            Curious
+          </button>
+        </div>
+
+        <div className="home-age-toggle">
+          <label className="home-age-label">
+            <input
+              type="checkbox"
+              checked={guestOver18}
+              onChange={(e) => setGuestOver18(e.target.checked)}
+              aria-label="I am 18 or older"
+            />
+            <span>I am 18 or older</span>
+          </label>
+          <p className="home-age-hint">
+            If unchecked, we&apos;ll show family-friendly recommendations only.
+          </p>
+        </div>
 
         {error && (
           <div className="status-center">
