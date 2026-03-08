@@ -1,7 +1,7 @@
 import "./App.css";
 
 import { useEffect, useRef, useState } from "react";
-import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 
 import Header from "./components/Header";
 import AuthModal from "./components/modals/AuthModal";
@@ -32,6 +32,7 @@ function App() {
   const [error, setError] = useState(null);
   const [savingTitle, setSavingTitle] = useState(null);
   const [authUser, setAuthUser] = useState(null);
+  const [authHydrated, setAuthHydrated] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState("login"); // "login" | "register"
   const [authContextMessage, setAuthContextMessage] = useState(null); // e.g. why modal was opened (watchlist)
@@ -71,7 +72,10 @@ function App() {
 
   /* Load current user if token exists */
   useEffect(() => {
-    if (!hasAccessToken()) return;
+    if (!hasAccessToken()) {
+      setAuthHydrated(true);
+      return;
+    }
 
     fetchMe()
       .then((user) => {
@@ -84,6 +88,9 @@ function App() {
       .catch(() => {
         logout();
         setAuthUser(null);
+      })
+      .finally(() => {
+        setAuthHydrated(true);
       });
   }, []);
 
@@ -424,40 +431,58 @@ function scrollCarousel(direction) {
             <Route
               path="/recommend"
               element={
-                <RecommendPage
-                  onSubmitPreferences={handleFormSubmit}
-                  isLoading={isLoading}
-                  error={error}
-                  recommendations={recommendations}
-                  carouselRef={carouselRef}
-                  onScrollCarousel={scrollCarousel}
-                  isSaved={isSaved}
-                  onToggleSave={toggleSave}
-                  savingTitle={savingTitle}
-                />
+                !authHydrated ? (
+                  <div className="auth-loading"><p className="loading-text">Loading...</p></div>
+                ) : authUser ? (
+                  <RecommendPage
+                    onSubmitPreferences={handleFormSubmit}
+                    isLoading={isLoading}
+                    error={error}
+                    recommendations={recommendations}
+                    carouselRef={carouselRef}
+                    onScrollCarousel={scrollCarousel}
+                    isSaved={isSaved}
+                    onToggleSave={toggleSave}
+                    savingTitle={savingTitle}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
               }
             />
 
             <Route
               path="/watchlist"
               element={
-                <WatchlistPage
-                  authUser={authUser}
-                  watchlist={watchlist}
-                  onOpenLogin={() => openAuthModal("login")}
-                  onRemoveFromWatchlist={handleRemoveFromWatchlist}
-                />
+                !authHydrated ? (
+                  <div className="auth-loading"><p className="loading-text">Loading...</p></div>
+                ) : authUser ? (
+                  <WatchlistPage
+                    authUser={authUser}
+                    watchlist={watchlist}
+                    onOpenLogin={() => openAuthModal("login")}
+                    onRemoveFromWatchlist={handleRemoveFromWatchlist}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
               }
             />
 
             <Route
               path="/search"
               element={
-                <SearchPage
-                  isSaved={isSaved}
-                  onToggleSave={toggleSave}
-                  savingTitle={savingTitle}
-                />
+                !authHydrated ? (
+                  <div className="auth-loading"><p className="loading-text">Loading...</p></div>
+                ) : authUser ? (
+                  <SearchPage
+                    isSaved={isSaved}
+                    onToggleSave={toggleSave}
+                    savingTitle={savingTitle}
+                  />
+                ) : (
+                  <Navigate to="/" replace />
+                )
               }
             />
           </Routes>

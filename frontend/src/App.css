@@ -681,6 +681,13 @@ body {
   color: #c7d2fe;
 }
 
+.auth-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+}
+
 .error-text {
   color: #f87171;
 }
