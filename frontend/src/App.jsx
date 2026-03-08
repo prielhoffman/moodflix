@@ -13,6 +13,7 @@ import WatchlistPage from "./pages/WatchlistPage";
 
 import {
   recommendShows,
+  semanticSearch,
   addToWatchlist,
   removeFromWatchlist,
   fetchWatchlist,
@@ -118,6 +119,34 @@ function App() {
     }
   }
 
+  /** Guest semantic search: POST /search/semantic → 5 results, stay on /. */
+  async function handleGuestSearch(query) {
+    const trimmed = (query || "").trim();
+    if (!trimmed) {
+      setError("Please enter a search term.");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    setRecommendations([]);
+    try {
+      const results = await semanticSearch(trimmed, 5);
+      const normalized = (Array.isArray(results) ? results : []).map((item) => ({
+        ...item,
+        short_summary: item.overview ?? item.short_summary ?? "No summary available.",
+        recommendation_reason: item.ai_match_reason ?? item.recommendation_reason ?? null,
+        tmdb_rating: item.vote_average ?? item.tmdb_rating,
+      }));
+      setRecommendations(normalized);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "Search failed. Please try again.");
+      setRecommendations([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   /** Home quick flow: mood or search query → POST /recommend → navigate to /recommend with results. */
   async function handleQuickRecommend({ mood, query, guestFamilySafe }) {
     setIsLoading(true);
@@ -141,11 +170,15 @@ function App() {
       const results = await recommendShows(payload);
       setRecommendations(Array.isArray(results) ? results : []);
       await loadWatchlist();
-      navigate("/recommend");
+      if (authUser) {
+        navigate("/recommend");
+      }
     } catch (err) {
       console.error(err);
       setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
-      navigate("/recommend");
+      if (authUser) {
+        navigate("/recommend");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -350,9 +383,15 @@ function scrollCarousel(direction) {
                   />
                 ) : (
                   <GuestLanding
-                    onQuickRecommend={handleQuickRecommend}
+                    onGuestSearch={handleGuestSearch}
                     isLoading={isLoading}
                     error={error}
+                    recommendations={recommendations}
+                    carouselRef={carouselRef}
+                    onScrollCarousel={scrollCarousel}
+                    isSaved={isSaved}
+                    onToggleSave={toggleSave}
+                    savingTitle={savingTitle}
                   />
                 )
               }
