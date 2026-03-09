@@ -359,5 +359,4 @@ See [docs/database.md](database.md) for details. If the DB has fewer than 50 sho
 ## Next Steps
 
 - See [README.md](../README.md) for full project documentation
-- Check [Environment Configuration](../README.md#environment-configuration) for `.env` setup
-- Review [Testing Strategy](../README.md#testing-strategy) for running tests
+- Check [docs/database.md](database.md) for migrations and seeding

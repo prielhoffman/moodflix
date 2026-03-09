@@ -1,12 +1,12 @@
 # MoodFlix Planning
 
-**Canonical planning and design reference.** This file covers why we're building MoodFlix, how we think about the project, key decisions, and the planning steps (Step 1–9). All changes and suggestions align with these goals unless explicitly discussed.
+Canonical planning and design reference. Covers project goals, success criteria, and decision rules for future changes.
 
 ---
 
-## Step 1 – Project Goal Definition
+## Project Goal Definition
 
-### 1. Goal Statement
+### Goal Statement
 
 | Dimension | Definition |
 |-----------|------------|
@@ -16,7 +16,7 @@
 
 ---
 
-### 2. Success Metrics (Checklist)
+### Success Metrics (Checklist)
 
 #### User Flow
 
@@ -33,7 +33,7 @@
 
 ---
 
-### 3. Current Project Alignment
+### Current Project Alignment
 
 #### What Already Aligns
 
@@ -61,7 +61,7 @@
 
 ---
 
-### 4. Roadmap (MVP / V2 / V3)
+### Roadmap (MVP / V2 / V3)
 
 #### MVP (Job-Ready)
 
@@ -91,14 +91,7 @@
 
 ---
 
-### 5. Recommended Next Steps (For Later Planning)
-
-1. **Step 2** – Define explicit planning steps (e.g. UX flow, API contracts, data model) that reference Step 1.
-2. **Gap review** – When prioritizing work, use the gaps above (1-minute flow, search relevance, setup simplicity) to decide what to tackle first.
-
----
-
-### 6. Decision Rule for Future Suggestions
+### Decision Rule for Future Suggestions
 
 When proposing changes:
 

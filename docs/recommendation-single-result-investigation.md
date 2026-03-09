@@ -1,6 +1,6 @@
-# Recommendation pipeline: why only one result is returned
+# Recommendation Pipeline: Single-Result Troubleshooting
 
-**Note:** A fix was applied so that when the DB has fewer than 50 rows, the system now uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (for example, when only 1 row exists from a watchlist add-by-title flow).
+When the DB has fewer than 50 rows, the system uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (e.g. only 1 row from a watchlist add-by-title flow).
 
 ## Diagnostics (form flow: only 1 recommendation)
 
@@ -25,7 +25,7 @@ After submitting the recommendations form, check server logs for these lines to 
 
 ---
 
-## 1) How candidates are selected (DB vs fallback)
+## 1. How candidates are selected (DB vs fallback)
 
 - **When the request includes a non-empty `query`** (e.g. home search "Find shows"):
   - The query is embedded and **semantic search** runs: `_fetch_candidate_rows(db, query_vec, candidate_top_k)`.
@@ -45,7 +45,7 @@ So: **DB vs fallback** is “DB when we have enough rows (≥ 50 for form flow; 
 
 ---
 
-## 2) Filtering (genre, mood, binge, etc.)
+## 2. Filtering (genre, mood, binge, etc.)
 
 Filtering happens in a single loop over the candidate list. A show is **dropped** (not added to `candidate_items`) if any of the following apply:
 
@@ -65,7 +65,7 @@ Mood is **not** a hard filter: it only affects **ranking** (mood-matched shows g
 
 ---
 
-## 3) Why you might get only one result
+## 3. Why you might get only one result
 
 ### A) Semantic path (request **has** a `query`) — most likely
 
@@ -87,7 +87,7 @@ There is **no** watchlist-based filtering in this logic; we do not exclude alrea
 
 ---
 
-## 4) What is **not** limiting results to 1
+## 4. What is **not** limiting results to 1
 
 - **`top_n`**: Not ignored. Default 20; we take `scored[: take]` with `take = max(1, int(top_n))` (or 2× for family), then `outputs[: int(top_n)]`. So we never force “exactly 1”; we only **cap** at `top_n`. If there is only 1 item in `scored`, we return 1.
 - **Slicing**: There is no `results[:1]` or similar that would cap to one. The only slices are by `take` and by `top_n` as above.
@@ -98,29 +98,15 @@ So the single result is because **the pipeline only has one (or very few) candid
 
 ---
 
-## 5) Debug logging added (temporary)
+## 5. Server logs for diagnostics
 
-In `app/logic.py`, the following **temporary** logs were added so you can see exactly where the pipeline narrows:
+Check uvicorn stdout for `[recommend]` lines:
+- **`source=db+semantic`** – Semantic path; `db_shows_with_embedding` and `candidates_returned` show candidate pool size.
+- **`source=db`** or **`source=fallback`** – Form flow; `candidates_before_filtering` and `candidates_after_filtering` show where the pool shrinks.
 
-1. **Source and DB size**
-   - **With query**: `[recommend] source=db+semantic: total_db_shows=…, db_shows_with_embedding=…, candidate_top_k=…, candidates_returned=…`
-   - **No query**: `[recommend] source=db: total_db_shows=…` (or warning if load failed and we fall back).
-   - **Fallback used**: `[recommend] source=fallback: total_fallback_shows=…`
+**Interpretation:** If `candidates_returned=1` and `db_shows_with_embedding=1` → lack of embeddings. If `candidates_before_filtering` is large but `candidates_after_filtering=1` → filtering is the bottleneck.
 
-2. **Before filtering**: `[recommend] candidates_before_filtering=… (top_n=…)`
-
-3. **After filtering**: `[recommend] candidates_after_filtering=…`
-
-4. **Before return**: `[recommend] final_result_count=… (requested top_n=…)`
-
-**How to use them**
-
-- Reproduce the “only one recommendation” request (same route: form vs home search, and same payload: with/without `query`).
-- Check server logs (e.g. uvicorn stdout) for the `[recommend]` lines.
-
-Interpretation:
-
-- If you see **`candidates_returned=1`** (or very small) and **`db_shows_with_embedding=1`** (or very small) → the semantic path is used and **lack of embeddings** is the cause; fix by populating embeddings for more (or all) shows.
+- Reproduce “only one recommendation” request (same route: form vs home search, and same payload: with/without `query`).
+**Detailed:** If you see **`candidates_returned=1`** (or very small) and **`db_shows_with_embedding=1`** (or very small) → the semantic path is used and **lack of embeddings** is the cause; fix by populating embeddings for more (or all) shows.
 - If you see **`candidates_before_filtering`** large but **`candidates_after_filtering=1`** → the no-query path is used and **filtering** is the cause; then relax or debug filters (genre, binge, language, kids/family) as needed.
 
-No behavior of the recommendation logic was changed; only logging was added.

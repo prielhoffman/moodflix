@@ -102,18 +102,7 @@ alembic upgrade head
 
 ---
 
-## 3. Migration chain (head)
-
-Current head revision: **e5f6a7b8c9d0** (`add_user_full_name_date_of_birth`).
-
-Order:  
-`77c9ad2999fb` → `4e3c32caba36` → `a1b2c3d4e5f6` → `e39914a70776` → `48da73d26c21` → `6b6f7d9c2f10` → `b7c8d9e0f1a2` → `c8d9e0f1a2b3` → `d9e0f1a2b3c4` → **e5f6a7b8c9d0**.
-
-If your DB was created earlier and some migrations were never run, the schema will be missing tables or columns (e.g. `users.full_name`, `users.date_of_birth`, `shows.content_rating`, `watchlist_items.show_id`). Running `alembic upgrade head` brings the DB in line with the current models.
-
----
-
-## 4. If schema mismatch is detected
+## 3. If schema mismatch is detected
 
 - **Symptom:** Errors about missing columns/tables or wrong types when the app runs.
 - **Cause:** Database is behind the migrations (or migrations were never run).
@@ -123,7 +112,7 @@ After any model change, add a new migration with `alembic revision --autogenerat
 
 ---
 
-## 5. Verify and seed the `shows` table
+## 4. Verify and seed the `shows` table
 
 Recommendations use the **static fallback** when the `shows` table is **empty or under-seeded** (fewer than 50 rows). This ensures a sufficient candidate pool for scoring; otherwise a DB with 1–2 rows (e.g. from watchlist add-by-title) would return only 1–2 recommendations. **Watchlist Save** still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` with at least 50 rows (200+ recommended for production-like behavior).
 

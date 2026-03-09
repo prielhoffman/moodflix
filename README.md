@@ -1,17 +1,33 @@
-# 📺 MoodFlix
+# MoodFlix
 
-MoodFlix is a full‑stack project that recommends **TV shows** based on a user’s **mood** and **watching preferences**. It also supports **accounts + per‑user watchlists**, and can optionally enrich recommendations with **TMDB metadata**.
-
-An **AI layer** provides **local embeddings** (sentence-transformers) stored in **pgvector** for semantic search and vector-based similarity in recommendations.
+**AI-powered TV show recommendations** based on mood, preferences, and natural-language search. A full-stack demo of production-like architecture: FastAPI, React, PostgreSQL + pgvector, semantic search, and TMDB ingestion.
 
 ---
 
-## Documentation
+## Project Overview
 
-- **Planning & design decisions:** [docs/PLANNING.md](docs/PLANNING.md)
-- **Local setup guide (Windows):** [docs/setup.md](docs/setup.md)
-- **Database migrations & seeding:** [docs/database.md](docs/database.md)
-- **Recommendation pipeline diagnostics:** [docs/recommendation-single-result-investigation.md](docs/recommendation-single-result-investigation.md)
+MoodFlix helps users find TV shows quickly by combining:
+
+- **Mood-based recommendations** – Chill, Adrenaline, Curious, etc.
+- **Constraint filtering** – Age, binge preference, episode length, genres, watching context
+- **Semantic search** – Natural-language queries (e.g. "cozy mystery with a twist")
+- **Per-user watchlists** – Save and manage shows (JWT auth)
+
+The system supports both **authenticated** and **guest** flows. Guests get a limited landing page with quick mood buttons and text search; authenticated users get the full recommendation form, semantic search, and watchlist.
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Recommendations** | `POST /recommend` – Top N shows ranked by mood, genres, binge preference, episode length |
+| **Semantic search** | `POST /search/semantic` – Vector similarity over show embeddings (pgvector) |
+| **More like this** | `POST /search/more-like-this` – Similar shows by `show_id` |
+| **Auth** | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` – JWT |
+| **Watchlist** | `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required) |
+| **TMDB enrichment** | Optional write-through cache for posters, ratings, overviews |
+| **Guest flow** | Quick mood buttons (Chill, Adrenaline, Curious) + text search on landing page |
 
 ---
 
@@ -35,117 +51,80 @@ flowchart TB
         Embed[Embeddings: Sentence Transformers]
     end
 
+    subgraph External [External]
+        TMDB[TMDB API]
+    end
+
     React -->|REST API| FastAPI
     FastAPI -->|SQL + vector search| Postgres
     FastAPI -->|embed query / candidates| Embed
     Embed -->|vector 384| Postgres
+    FastAPI -->|enrich metadata| TMDB
 ```
 
-**Flow:** User interacts with the React frontend, which calls the FastAPI backend. The backend queries PostgreSQL (with pgvector for semantic search) and uses local Sentence Transformers for embeddings. Optional TMDB enrichment runs as a write-through cache when configured.
+### Component Overview
+
+| Component | Role |
+|-----------|------|
+| **Frontend (React)** | User interface, auth state, recommendation form, guest landing, watchlist |
+| **Backend API (FastAPI)** | REST endpoints, auth, recommendation logic, semantic search, watchlist, TMDB enrichment |
+| **Database (PostgreSQL + pgvector)** | Users, shows, watchlist items, vector embeddings (384-dim) |
+| **Embeddings pipeline** | `scripts/generate_embeddings.py` – Local sentence-transformers, batch writes to `shows.embedding` |
+| **TMDB ingestion** | `scripts/ingest_tmdb.py` – Seeds `shows` from TMDB (requires `TMDB_API_KEY`) |
+
+**Flow:** User interacts with React → calls FastAPI → queries Postgres (with pgvector for semantic search) and optionally uses TMDB for metadata enrichment. Embeddings are generated offline and stored in the DB.
 
 ---
 
-## 🖥️ Tech Stack
+## Tech Stack
 
-- **Backend**: FastAPI, SQLAlchemy, Alembic
-- **Database**: PostgreSQL (Docker) + pgvector
-- **Frontend**: React + Vite
-- **Auth**: JWT (Bearer tokens)
-- **AI**: Local embeddings (sentence-transformers) + pgvector storage
-- **Infrastructure**: Alembic for schema migrations; pgvector extension auto-initialized on first DB connection (`app/db.py`)
-
----
-
-## ✨ Current Features (Implemented)
-
-- **User authentication**
-  - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
-- **Recommendations**
-  - `POST /recommend` returns **top N (default 10)** shows ranked by existing scoring logic
-  - Optional `query` field enables semantic candidate retrieval before scoring
-  - Includes short **explanations** (“why this was recommended”)
-- **Watchlist (per user)**
-  - `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required)
-  - Watchlist items reference the `shows` table via `show_id` (FK); add/remove by `show_id` (title supported for legacy/remove)
-- **DB‑backed shows**
-  - Recommendations prefer the `shows` table in Postgres (fallback to static catalog when DB is empty or under-seeded; see [Recommendation pipeline](#recommendation-pipeline))
-  - `shows` stores TMDB metadata (content_rating, number_of_seasons, average_episode_length, original_language) for faster reads and fewer API calls
-- **Optional TMDB enrichment (write-through cache)**
-  - When `TMDB_API_KEY` is set, posters/ratings/overviews/dates are fetched from TMDB and **persisted to the DB** (write-through cache)
-  - Subsequent requests read from the local `shows` table first; TMDB is only called when data is missing
-  - If TMDB is down, rate-limited, or misconfigured, recommendations still work (TMDB fields fall back to DB or `null`)
-- **Semantic search (MVP)**
-  - `POST /search/semantic` performs pgvector cosine search over embeddings (HNSW index for performance)
-- **More Like This (V2)**
-  - `POST /search/more-like-this` returns similar shows by `show_id` (backend ready; frontend UI planned for V2)
-- **Embeddings generation (batch script)**
-  - `scripts/generate_embeddings.py` generates local embeddings and stores them in `shows.embedding` (`vector(384)`)
-- **Graceful handling of missing API keys**
-  - Server starts without `TMDB_API_KEY`
+| Layer | Technologies |
+|-------|---------------|
+| **Backend** | FastAPI, SQLAlchemy, Alembic |
+| **Database** | PostgreSQL (Docker), pgvector |
+| **Frontend** | React, Vite |
+| **Auth** | JWT (Bearer tokens) |
+| **AI** | sentence-transformers (all-MiniLM-L6-v2), pgvector |
 
 ---
 
-## Recommendation pipeline
+## Recommendation Engine Overview
 
-The recommendation system uses one of two data sources:
+### Data sources
 
-| Condition | Data source | Behavior |
-|-----------|-------------|----------|
-| DB has **≥ 50 shows** | PostgreSQL `shows` table | Recommendations are generated from the database (DB-backed). |
-| DB has **< 50 shows** (or empty) | Static catalog (`app/data.py`) | Fallback ensures a sufficient candidate pool (~50 shows) so you get up to `top_n` results instead of 1. |
+| Condition | Source | Behavior |
+|-----------|--------|----------|
+| DB has **≥ 50 shows** | PostgreSQL `shows` table | DB-backed recommendations |
+| DB has **< 50 shows** (or empty) | Static catalog (`app/data.py`) | Fallback ensures a sufficient candidate pool |
 
-**Why the threshold?** When the DB has only a few rows (e.g. 1 from a watchlist add-by-title), using it directly would return at most that many recommendations. The fallback guarantees a diverse pool for scoring and filtering.
+### Pipeline stages
 
-**Seeding the database:** To get DB-backed recommendations, seed `shows` with at least 50 rows (200+ recommended for production-like behavior). Use `scripts/ingest_tmdb.py` (requires `TMDB_API_KEY` in `.env`). See [Seeding the database](#seeding-the-database).
-
----
-
-## 📐 Recent Improvements & Architecture
-
-### Database Schema Evolution
-
-- **Watchlist refactor**  
-  The watchlist now uses a **foreign key to the `shows` table** (`show_id`) instead of storing only a title string. This ensures a stable link to the catalog, avoids duplicates by show, and allows the API to accept `show_id` for add/remove (with optional title for backward compatibility). The `title` column is kept as an optional denormalized field for display.
-
-- **Shows table expansion**  
-  The `shows` table has been extended with TMDB-derived metadata columns: **`content_rating`**, **`average_episode_length`**, **`number_of_seasons`**, and **`original_language`**. These are populated by the write-through enrichment flow so recommendations and filtering can read from the database first and reduce dependency on the TMDB API.
-
-### Search Optimization
-
-- **Semantic search performance**  
-  Vector similarity search uses an **HNSW index** on `shows.embedding` with **`vector_cosine_ops`** (pgvector). This avoids full table scans on `ORDER BY embedding <=> query_vector` and reduces latency for:
-  - `POST /search/semantic` (natural-language search)
-  - `POST /search/more-like-this` (similar shows by `show_id`)
-  - Semantic candidate retrieval inside the recommendation pipeline when a `query` is provided.
-
-### Optional TMDB Enrichment (Write-Through Cache)
-
-When TMDB is configured, the app **persists fetched metadata to the local `shows` table** after each enrichment. Subsequent requests read from the database first; TMDB is only called when data is missing. This reduces API latency and external dependency. Recommendations work without TMDB (fallback data or DB-only).
-
-### Infrastructure
-
-- **pgvector extension**  
-  The **pgvector** extension is ensured on every new database connection via a pool listener in `app/db.py`. The app can rely on vector support without depending on a one-off migration or manual setup.
-
-- **Migrations**  
-  **Alembic** is used for all schema changes (watchlist `show_id`, shows metadata columns, HNSW index, etc.). Run `alembic upgrade head` after pulling or when deploying.
-
-### User Registration & Age-Based Recommendations
-
-- **Registration fields**  
-  Users now provide **full_name**, **date_of_birth**, **email**, and **password** when registering. `date_of_birth` is validated (must be in the past; age 13–120).
-
-- **Recommendations without age input**  
-  The recommendations form no longer asks for age. For **authenticated** users, age is inferred from `date_of_birth` and used for content filtering. For **unauthenticated** users, age filtering is skipped (treated as adult).
-
-### Bug Fixes & Safety
-
-- **Kids / family filtering**  
-  Filtering logic for family and kids contexts has been tightened. A **title blacklist** (`_KIDS_TITLE_BLACKLIST`) blocks known adult-oriented titles in kids/family mode, in addition to genre-based and keyword-based rules, improving safety for age-restricted use cases.
+1. **Candidate selection** – With `query`: semantic search over embeddings. Without `query`: full DB load (or static fallback if under-seeded).
+2. **Filtering** – Hard filters: age/content rating, kids/family safety, binge preference, episode length, language, genre match (when user selects genres).
+3. **Scoring** – Mood boost, genre match, binge preference, episode length, rating, vote count. Mood is **not** a hard filter; it affects ranking only.
+4. **Ranking** – Sort by score, take top N.
+5. **TMDB enrichment** – Optional metadata (posters, ratings, overviews) persisted to DB.
+6. **Guest mood diversity** – Only for guest mood buttons: frontend applies a lightweight genre-overlap diversification pass (skip shows with 2+ shared genres to already-selected items) before displaying 5 results.
 
 ---
 
-## 📁 Project Structure (High Level)
+## Semantic Search Overview
+
+- **Embeddings** – `sentence-transformers/all-MiniLM-L6-v2` produces 384‑dim vectors per show (title + genres + overview).
+- **Vector similarity** – Cosine distance in pgvector via `ORDER BY embedding <=> query_vector`.
+- **Storage** – `shows.embedding` column (`vector(384)`), HNSW index with `vector_cosine_ops` for fast approximate search.
+- **Usage** – `POST /search/semantic` and `POST /recommend` (when `query` is provided) use semantic search for candidate retrieval.
+
+### Generate embeddings
+
+```powershell
+python scripts/generate_embeddings.py
+# Optional: --limit N, --force, --batch-size 50
+```
+
+---
+
+## Project Structure
 
 ```
 app/                  # FastAPI app, routers, business logic
@@ -153,274 +132,119 @@ app/                  # FastAPI app, routers, business logic
   logic.py            # Recommendation engine (DB-backed + fallback)
   models.py           # SQLAlchemy models (User, WatchlistItem, Show)
   schemas.py          # Pydantic schemas (API contracts)
-  tmdb.py             # TMDB enrichment adapter (optional / best-effort)
+  embeddings.py       # Embedding logic (sentence-transformers)
+  tmdb.py             # TMDB enrichment adapter (optional)
 
 alembic/              # DB migrations
-scripts/              # One-off utilities (ingest, embeddings generation)
+scripts/              # ingest_tmdb.py, generate_embeddings.py
 frontend/             # React + Vite UI
-tests/                # pytest suite
-docker/               # Docker init scripts (pgvector extension)
+docs/                 # Setup, database, planning, troubleshooting
+tests/                # pytest (backend), Vitest (frontend)
 ```
 
 ---
 
-## 💻 Setup Instructions
+## Local Setup Instructions
 
 ### Prerequisites
 
-- **Python 3.12.x** (recommended)
-- Node.js (for the frontend)
-- Docker Desktop (for Postgres + pgvector)
+- Python 3.12.x
+- Node.js
+- Docker (for PostgreSQL + pgvector)
 
-### 1) Start Postgres (with pgvector)
+### 1. Start database
 
-From the repo root:
-
-```bash
+```powershell
 docker compose up -d db
 alembic upgrade head
 ```
 
-### 2) Backend setup & run
-
-```bash
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-
-uvicorn app.api:app --reload
-```
-
-Backend URLs:
-- API: `http://127.0.0.1:8000`
-- Swagger: `http://127.0.0.1:8000/docs`
-
-### 3) Frontend setup & run
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend URL:
-- `http://localhost:5173`
-
-### 4) Run migrations (full_name + date_of_birth)
-
-After pulling the latest changes, run:
-
-```bash
-alembic upgrade head
-```
-
-This adds `full_name` and `date_of_birth` to the `users` table. Existing users are backfilled with defaults (email prefix as full_name, `1990-01-01` as date_of_birth).
-
-**Verify the new flow:**
-1. Register a new user with full name, date of birth, email, and password.
-2. Log in and open the recommendations page — the form no longer asks for age.
-3. Get recommendations (age is inferred from your date of birth for content filtering).
-4. Log out and get recommendations — they work without age filtering (treated as adult).
-
----
-
-## 🔎 Environment Variables
-
-Copy the template and create your local `.env`:
-
-```bash
-cp .env.example .env
-```
-
-PowerShell:
+### 2. Configure environment
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-The `.env.example` file contains all variables used by backend runtime, docker compose defaults, auth, TMDB caching/enrichment, and optional frontend API base URL.
+Edit `.env`:
 
-### Database (used by backend + Alembic)
+- `POSTGRES_*` or `DATABASE_URL` – Database connection
+- `SECRET_KEY` – JWT signing
+- `TMDB_API_KEY` – Optional; required for seeding and TMDB enrichment
 
-The backend supports either:
-- `DATABASE_URL` (preferred when set), or
-- `POSTGRES_*` variables (fallback)
-
-Using `POSTGRES_*`:
-
-```env
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=moodflix
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-```
-
-Optional direct connection string:
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/moodflix
-```
-
-### Auth / JWT
-
-```env
-SECRET_KEY=change-me
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
-
-### TMDB (optional)
-
-```env
-TMDB_API_KEY=your_tmdb_key
-```
-
-If missing, the backend still starts and `/recommend` still works (TMDB fields will be `null`). **Required for seeding:** `scripts/ingest_tmdb.py` needs `TMDB_API_KEY` in `.env` to populate the `shows` table.
-
-### Seeding the database
-
-To get DB-backed recommendations (instead of the static fallback), seed the `shows` table:
-
-1. Set `TMDB_API_KEY` in `.env` (get a free key from [themoviedb.org](https://www.themoviedb.org/settings/api)).
-2. Run the ingest script:
-
-   ```powershell
-   python scripts/ingest_tmdb.py
-   ```
-
-3. (Optional) Increase `TMDB_PAGES` in `.env` for more shows (default 2 ≈ 40 shows; use 5+ for 100+ shows, 10 for 200+).
-4. Generate embeddings for semantic search: `python scripts/generate_embeddings.py`
-
-**Quick verification:**
+### 3. Backend
 
 ```powershell
-# Check show count
-docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
-
-# Check show + embedding counts (semantic search uses rows with embedding)
-docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*), COUNT(embedding) FROM shows;"
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.api:app --reload
 ```
 
-## Demo without TMDB
+- API: `http://127.0.0.1:8000`
+- Swagger: `http://127.0.0.1:8000/docs`
 
-You can demo recommendations without TMDB and without seeded Postgres content:
+### 4. Frontend
 
-- Leave `TMDB_API_KEY` unset.
-- Start the backend normally.
-- Call `POST /recommend`.
-
-When the `shows` table is empty or under-seeded (< 50 rows), the app falls back to a curated static dataset in `app/data.py` with diverse genres, languages, content ratings, season counts, and episode lengths.
-
-Example payloads that should return multiple recommendations from fallback data:
-
-```bash
-curl -X POST http://127.0.0.1:8000/recommend ^
-  -H "Content-Type: application/json" ^
-  -d "{\"age\":28,\"mood\":\"chill\",\"preferred_genres\":[\"comedy\",\"slice of life\"],\"binge_preference\":\"short_series\",\"episode_length_preference\":\"short\",\"watching_context\":\"alone\"}"
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
 
-```bash
-curl -X POST http://127.0.0.1:8000/recommend ^
-  -H "Content-Type: application/json" ^
-  -d "{\"age\":30,\"mood\":\"adrenaline\",\"preferred_genres\":[\"action\",\"thriller\"],\"binge_preference\":\"binge\",\"episode_length_preference\":\"long\",\"watching_context\":\"partner\"}"
+- App: `http://localhost:5173`
+
+### 5. Seed (optional)
+
+For DB-backed recommendations:
+
+```powershell
+python scripts/ingest_tmdb.py
+python scripts/generate_embeddings.py
 ```
 
-```bash
-curl -X POST http://127.0.0.1:8000/recommend ^
-  -H "Content-Type: application/json" ^
-  -d "{\"age\":12,\"mood\":\"happy\",\"preferred_genres\":[\"family\",\"animation\"],\"binge_preference\":\"short_series\",\"episode_length_preference\":\"short\",\"watching_context\":\"family\"}"
-```
-
-### Embeddings (local, no API keys)
-
-Embeddings are generated locally via `sentence-transformers` — no API key required.
-
-### Frontend (optional)
-
-```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
+See [docs/setup.md](docs/setup.md) for detailed Windows setup.
 
 ---
 
-## 🤖 AI / Embeddings (pgvector)
+## Running the Project
 
-Embeddings are generated via a **batch script** (not an API endpoint yet). They are stored in:
-- `shows.embedding` as `vector(384)` (pgvector)
-
-The script:
-- builds input text: `Title / Genres / Overview`
-- batches requests (default batch size 100)
-- runs locally (no paid APIs)
-- commits after each batch
-
-### Generate embeddings
-
-```powershell
-.\.venv\Scripts\python scripts\generate_embeddings.py --batch-size 100
-
-# Optional flags:
-#   --limit 200
-#   --force
-#   --batch-size 50
-```
-
----
-
-## 🗺️ Roadmap / Planned Features
-
-- **Personalization** via watch history and explicit feedback (“helped / didn’t help”)
-- **Production hardening**
-  - config cleanup, logging, safer secrets handling, better error reporting
-- **CI/CD**
-  - automated tests, linting, and container builds
-- **UI improvements**
-  - more polished browsing experience, better auth UX, richer show details
+| Command | Purpose |
+|---------|---------|
+| `uvicorn app.api:app --reload` | Backend (from repo root) |
+| `cd frontend && npm run dev` | Frontend |
+| `docker compose up -d db` | Database |
 
 ---
 
 ## Testing
 
-- **Backend:** pytest (auth, recommendations, watchlist, semantic search, TMDB)
-- **Frontend:** Vitest (API client, components)
-
-```bash
-# Backend tests
+```powershell
+# Backend
 pytest
 
-# Frontend tests
+# Frontend
 cd frontend && npm test
 ```
 
-CI runs both on push/PR to main, master, and develop.
+---
+
+## Future Improvements
+
+| Area | Ideas |
+|------|-------|
+| **Explainability** | LLM-based explanations for recommendations |
+| **Natural language** | Richer query parsing beyond semantic search |
+| **Feedback** | Like/dislike learning for re-ranking |
+| **Infrastructure** | Redis caching, background workers for ingestion |
+| **Observability** | Metrics, tracing, dashboards |
 
 ---
 
-## 📋 Developer Notes
+## Documentation
 
-### Planning
-
-See [docs/PLANNING.md](docs/PLANNING.md) for project goals, success criteria, and decision rules for future changes.
-
-### Test `/recommend`
-
-- Use Swagger at `http://127.0.0.1:8000/docs`, or:
-
-```bash
-curl -X POST http://127.0.0.1:8000/recommend ^
-  -H "Content-Type: application/json" ^
-  -d "{\"age\":25,\"mood\":\"chill\",\"binge_preference\":\"binge\"}"
-```
-
-### Run tests
-
-See [Testing](#testing) above.
-
-### Debug endpoint status
-
-Debug-only endpoint(s) were removed from the backend and temporary frontend click-debug listeners were removed from the app shell.
-
-### Swagger docs
-
-- `http://127.0.0.1:8000/docs` shows request/response shapes for all endpoints and supports trying requests interactively.
+| File | Purpose |
+|-----|---------|
+| [docs/setup.md](docs/setup.md) | Step-by-step Windows setup |
+| [docs/database.md](docs/database.md) | Migrations, seeding, reset |
+| [docs/PLANNING.md](docs/PLANNING.md) | Project goals & roadmap |
+| [docs/recommendation-single-result-investigation.md](docs/recommendation-single-result-investigation.md) | Troubleshooting single-result issues |
