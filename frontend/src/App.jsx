@@ -201,10 +201,16 @@ function App() {
       watching_context: "alone",
       guest_family_safe: guestFamilySafe !== false,
     };
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'App.jsx:handleGuestMood',message:'payload before API',data:{mood,guestFamilySafe,guestFamilySafeType:typeof guestFamilySafe,payload},hypothesisId:'H1_H2',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     try {
       const results = await recommendShows(payload);
       const arr = Array.isArray(results) ? results : [];
-      setRecommendations(diversifyGuestMoodResults(arr, 5));
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'App.jsx:handleGuestMood',message:'after API',data:{rawCount:arr.length,sliceCount:arr.slice(0,5).length},hypothesisId:'H3_H4',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setRecommendations(arr.slice(0, 5));
     } catch (err) {
       console.error(err);
       setError(err?.message || "Recommendations temporarily unavailable. Please try again.");

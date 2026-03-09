@@ -1,4 +1,4 @@
-# MoodFlix
+# 📺 MoodFlix
 
 **AI-powered TV show recommendations** based on mood, preferences, and natural-language search. A full-stack demo of production-like architecture: FastAPI, React, PostgreSQL + pgvector, semantic search, and TMDB ingestion.
 

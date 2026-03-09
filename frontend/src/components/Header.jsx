@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import UserMenu from "./UserMenu";
 import "./Header.css";
 
@@ -10,14 +10,16 @@ function Header({
   onOpenProfile,
   onGoToSemanticSearch,
 }) {
+  const location = useLocation();
+  const isGuestHome = !authUser && location.pathname === "/";
   const userDisplayName =
     authUser?.full_name?.trim() || authUser?.email || "Account";
 
   return (
-    <header className="header">
+    <header className={`header ${isGuestHome ? "header-guest" : ""}`}>
       <div className="header-inner">
-        <Link to="/" className="logo-link" aria-label="Home - Recommendations">
-          <h2 className="logo">MoodFlix 📺</h2>
+        <Link to="/" className="logo-link" aria-label="Home">
+          <h2 className="logo">MoodFlix</h2>
         </Link>
 
         <div className="auth-area">

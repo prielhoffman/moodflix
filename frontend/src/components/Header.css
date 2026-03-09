@@ -131,3 +131,34 @@
 .auth-button.secondary:hover {
   background: rgba(99, 102, 241, 0.15);
 }
+
+/* Guest home: light header */
+.header-guest {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.header-guest .logo {
+  color: #0f172a;
+}
+
+.header-guest .auth-button {
+  background: #dc2626;
+}
+
+.header-guest .auth-button:hover {
+  background: #b91c1c;
+}
+
+.header-guest .auth-button.secondary {
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.header-guest .auth-button.secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
