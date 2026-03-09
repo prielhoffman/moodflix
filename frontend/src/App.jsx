@@ -24,6 +24,40 @@ import {
   logout,
 } from "./api/moodflixApi";
 
+/**
+ * Diversify guest mood results by genre overlap.
+ * Two shows are "too similar" if they share 2+ genres (case-insensitive).
+ * Keeps relevance order; skips shows too similar to already selected; returns up to maxCount.
+ */
+function diversifyGuestMoodResults(shows, maxCount = 5) {
+  if (!Array.isArray(shows) || shows.length === 0) return [];
+  const selected = [];
+  for (const show of shows) {
+    if (selected.length >= maxCount) break;
+    const genres = normalizeGenres(show.genres);
+    const tooSimilar = selected.some((s) => sharedGenreCount(genres, normalizeGenres(s.genres)) >= 2);
+    if (!tooSimilar) selected.push(show);
+  }
+  return selected;
+}
+
+function normalizeGenres(genres) {
+  if (!Array.isArray(genres)) return new Set();
+  return new Set(
+    genres
+      .map((g) => String(g).trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function sharedGenreCount(genresA, genresB) {
+  let count = 0;
+  for (const g of genresA) {
+    if (genresB.has(g)) count++;
+  }
+  return count;
+}
+
 function App() {
   const [recommendations, setRecommendations] = useState([]);
   const [watchlist, setWatchlist] = useState([]); // [{ title, poster_url }]
@@ -170,7 +204,7 @@ function App() {
     try {
       const results = await recommendShows(payload);
       const arr = Array.isArray(results) ? results : [];
-      setRecommendations(arr.slice(0, 5));
+      setRecommendations(diversifyGuestMoodResults(arr, 5));
     } catch (err) {
       console.error(err);
       setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
