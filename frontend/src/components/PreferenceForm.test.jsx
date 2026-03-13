@@ -18,6 +18,7 @@ describe("PreferenceForm", () => {
       binge_preference: "binge",
       preferred_genres: [],
       watching_context: "alone",
+      query: "",
     });
   });
 
@@ -30,7 +31,6 @@ describe("PreferenceForm", () => {
     await user.click(screen.getByText(/advanced preferences/i));
     await user.click(screen.getByLabelText("action"));
     await user.click(screen.getByLabelText("drama"));
-    await user.selectOptions(screen.getByLabelText(/^language$/i), "Hebrew");
     await user.selectOptions(screen.getByLabelText(/^episode length$/i), "long");
     await user.selectOptions(screen.getByLabelText(/^watching context$/i), "family");
     await user.click(screen.getByRole("button", { name: /get recommendations/i }));
@@ -40,9 +40,9 @@ describe("PreferenceForm", () => {
       mood: "chill",
       binge_preference: "binge",
       preferred_genres: ["action", "drama"],
-      language_preference: "Hebrew",
       episode_length_preference: "long",
       watching_context: "family",
+      query: "",
     });
   });
 
@@ -53,7 +53,6 @@ describe("PreferenceForm", () => {
     render(<PreferenceForm onSubmit={onSubmit} />);
 
     await user.click(screen.getByText(/advanced preferences/i));
-    await user.selectOptions(screen.getByLabelText(/^language$/i), "");
     await user.selectOptions(screen.getByLabelText(/^episode length$/i), "any");
     await user.click(screen.getByRole("button", { name: /get recommendations/i }));
 
@@ -66,7 +65,6 @@ describe("PreferenceForm", () => {
       preferred_genres: [],
       watching_context: "alone",
     });
-    expect(payload).not.toHaveProperty("language_preference");
     expect(payload).not.toHaveProperty("episode_length_preference");
   });
 });

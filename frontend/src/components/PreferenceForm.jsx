@@ -19,29 +19,16 @@ const SUPPORTED_GENRES = [
   "western",
 ];
 
-const LANGUAGE_OPTIONS = [
-  "English",
-  "Hebrew",
-  "Spanish",
-  "German",
-  "French",
-  "Japanese",
-  "Korean",
-  "Hindi",
-  "Arabic",
-];
-
 /*
-  PreferenceForm collects the user's basic preferences
-  and sends them to the parent component via onSubmit.
+  PreferenceForm collects the user's preferences for the form-based recommendation flow
+  and sends them to the parent via onSubmit. Fields: mood, binge, genre, episode length, watching context.
 */
 function PreferenceForm({ onSubmit }) {
-  // Form state: matches backend field names exactly (age removed - inferred from user's date_of_birth when authenticated)
+  // Form state: matches backend field names (age removed - inferred from user's date_of_birth when authenticated)
   const [formData, setFormData] = useState({
     mood: "chill",
     binge_preference: "binge",
     preferred_genres: [],
-    language_preference: "",
     episode_length_preference: "any",
     watching_context: "alone",
   });
@@ -79,20 +66,18 @@ function PreferenceForm({ onSubmit }) {
     const preparedData = { ...formData };
     preparedData.query = "";
 
-    if (!preparedData.language_preference) {
-      delete preparedData.language_preference;
-    }
-
     if (preparedData.episode_length_preference === "any") {
       delete preparedData.episode_length_preference;
     }
+    // Form flow does not use language; ensure it is never sent.
+    delete preparedData.language_preference;
 
     // Send data to parent (App.jsx)
     onSubmit(preparedData);
   }
 
   return (
-    <form className="preference-form" onSubmit={handleSubmit}>
+    <form className="preference-form" onSubmit={handleSubmit} data-form-component="PreferenceForm">
       <h2>Your preferences</h2>
 
       {/* Mood selection */}
@@ -163,23 +148,6 @@ function PreferenceForm({ onSubmit }) {
                 </label>
               ))}
             </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="language_preference">Language</label>
-            <select
-              id="language_preference"
-              name="language_preference"
-              value={formData.language_preference}
-              onChange={handleChange}
-            >
-              <option value="">Any</option>
-              {LANGUAGE_OPTIONS.map((language) => (
-                <option key={language} value={language}>
-                  {language}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="form-group">
