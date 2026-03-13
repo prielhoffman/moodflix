@@ -8,6 +8,8 @@ the main recommendation logic. All numeric tuning is centralized here.
 # --------------------------------- Recommendation defaults ---------------------------------
 DEFAULT_TOP_N = 20
 DEFAULT_CANDIDATE_TOP_K = 80
+# Form flow (no query): return a short curated shortlist only. Semantic path ignores this.
+FORM_FLOW_TOP_N = 5
 # When a request has a query, semantic search is used only if at least this many shows have embeddings.
 # If below this (or semantic returns fewer than top_n candidates), we fall back to full DB scan / static fallback.
 SEMANTIC_MIN_EMBEDDINGS = 50
@@ -55,6 +57,10 @@ GENRE_BASE_MULTIPLIER = 1.15
 # Extra multiplier per matching genre beyond the first (capped by GENRE_EXTRA_CAP).
 GENRE_EXTRA_PER_MATCH = 0.08
 GENRE_EXTRA_CAP = 0.35
+# Form flow only: stronger genre weight so explicit preferences (e.g. Comedy) matter more.
+FORM_GENRE_BASE_MULTIPLIER = 1.32
+FORM_GENRE_EXTRA_PER_MATCH = 0.10
+FORM_GENRE_EXTRA_CAP = 0.40
 
 # --------------------------------- Mood scoring (required form field – primary ranking factor) ---------------------------------
 # Mood is the core identity of MoodFlix: strong multiplier when show genres match user mood.
@@ -71,6 +77,14 @@ FAMILY_FRIENDLY_BOOST_MULTIPLIER = 1.18
 KIDS_WITHOUT_FAMILY_PENALTY = 0.1
 # Multiplier for talk/variety when user expects chill/happy/familiar reality.
 TALK_VARIETY_PENALTY = 0.92
+# Form flow only: stronger penalty so talk/variety/reality rarely make the shortlist.
+FORM_TALK_VARIETY_PENALTY = 0.22
+# Form flow only: quality/trust nudge so better-known shows rank above obscure ones (within same preference tier).
+# Boost: up to this much added to 1.0 from vote_count_norm (e.g. 0.10 => multiplier 1.0 to 1.10).
+FORM_QUALITY_VOTE_COUNT_BOOST = 0.10
+# Below this many votes, apply penalty (low-signal / obscure).
+FORM_LOW_VOTE_COUNT_THRESHOLD = 200
+FORM_LOW_VOTE_COUNT_PENALTY = 0.88
 # When mood is DARK, penalty for shows that also have comedy or family (dramedies, light procedurals).
 DARK_COMEDY_FAMILY_PENALTY = 0.4
 

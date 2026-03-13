@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from pathlib import Path
 from typing import Any, List, Optional
 
 import app.tmdb as tmdb_adapter
@@ -27,6 +29,18 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Temporary debug: log semantic candidates and final ranking for this query only.
+_DEBUG_SEMANTIC_QUERY = "sitcom about a workplace"
+_DEBUG_LOG_PATH = Path(__file__).resolve().parents[1] / "debug-8701ad.log"
+
+
+def _debug_append_log(payload: dict) -> None:
+    try:
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception as e:
+        logger.warning("[debug] Failed to write debug log: %s", e)
 
 
 def _int_env(name: str, default: int) -> int:
@@ -468,8 +482,13 @@ def recommend_shows(
     if candidate_top_k is None:
         candidate_top_k = config.DEFAULT_CANDIDATE_TOP_K
 
-    # Temporary debug: log inputs and which path will be used.
     query_text = (user_input.query or "").strip()
+    # Form flow (no query): return a short curated shortlist only.
+    if not query_text:
+        top_n = config.FORM_FLOW_TOP_N
+
+    # Temporary debug: log inputs and which path will be used.
+    debug_semantic_query = query_text.strip().lower() == _DEBUG_SEMANTIC_QUERY
     logger.info(
         "[recommend] recommend_shows input: query=%r (len=%d), top_n=%s, candidate_top_k=%s, mood=%s, "
         "binge_preference=%s, preferred_genres=%s, watching_context=%s, language_preference=%r, episode_length_preference=%s",
@@ -526,6 +545,32 @@ def recommend_shows(
                 candidate_top_k,
                 len(shows),
             )
+            # #region agent log — debug semantic candidates for "sitcom about a workplace"
+            if query_text.strip().lower() == _DEBUG_SEMANTIC_QUERY:
+                try:
+                    distance_expr = Show.embedding.cosine_distance(query_vec).label("distance")
+                    debug_rows = (
+                        db.query(Show, distance_expr)
+                        .filter(Show.embedding.isnot(None))
+                        .order_by(distance_expr.asc())
+                        .limit(candidate_top_k)
+                        .all()
+                    )
+                    initial_candidates = [
+                        {"rank": i + 1, "title": show.title, "id": show.id, "distance": float(dist) if dist is not None else None}
+                        for i, (show, dist) in enumerate(debug_rows)
+                    ]
+                    _debug_append_log({
+                        "sessionId": "8701ad",
+                        "location": "logic.py:semantic_candidates",
+                        "message": "initial candidate list before ranking",
+                        "data": {"query": query_text, "candidates": initial_candidates, "count": len(initial_candidates)},
+                        "hypothesisId": "H1",
+                        "timestamp": __import__("time").time() * 1000,
+                    })
+                except Exception as e:
+                    logger.warning("[debug] semantic candidates log failed: %s", e)
+            # #endregion
             # Robust fallback: if embeddings are scarce or semantic returned too few, use full DB scan so we still return top_n.
             if db_with_embedding < config.SEMANTIC_MIN_EMBEDDINGS or len(shows) < int(top_n):
                 logger.info(
@@ -615,6 +660,7 @@ def recommend_shows(
         "episode_length": 0,
         "language": 0,
         "genre_strict": 0,
+        "talk_variety_form": 0,
         "reality": 0,
     }
 
@@ -698,7 +744,8 @@ def recommend_shows(
                 rej["episode_length"] += 1
                 continue
 
-        if user_input.language_preference:
+        # Language filter: only in semantic/query path. Form flow does not use language.
+        if query_text and user_input.language_preference:
             show_language = _normalize_lang(show.get("language") or show.get("original_language"))
             preferred_lang = _normalize_lang(user_input.language_preference)
             if show_language and preferred_lang and show_language != preferred_lang:
@@ -711,6 +758,12 @@ def recommend_shows(
         # if user selected genres, candidate must match at least one.
         if user_genres and not common_genres:
             rej["genre_strict"] += 1
+            continue
+
+        # Form flow: when user selected narrative genres (e.g. Comedy) and did not select Reality,
+        # exclude talk/variety/news so the shortlist stays scripted.
+        if source_path != "semantic" and user_genres and not wants_reality and (show_genres & _LOW_PRIORITY_GENRES):
+            rej["talk_variety_form"] += 1
             continue
 
         # If reality is requested, enforce actual reality content
@@ -753,6 +806,28 @@ def recommend_shows(
     )
     if sum(rej.values()) > 0:
         logger.info("[recommend] total rejected=%d", sum(rej.values()))
+
+    # #region agent log — form flow: filtering summary
+    if source_path != "semantic":
+        try:
+            _debug_append_log({
+                "sessionId": "8701ad",
+                "location": "logic.py:recommend_shows",
+                "message": "form flow: filtering summary",
+                "data": {
+                    "candidates_at_start": len(shows),
+                    "rejection_counts": {k: v for k, v in rej.items() if v > 0},
+                    "total_rejected": sum(rej.values()),
+                    "remaining_after_filtering": len(candidate_items),
+                    "top_n": top_n,
+                    "source_path": source_path,
+                },
+                "hypothesisId": "form_filter",
+                "timestamp": __import__("time").time() * 1000,
+            })
+        except Exception as e:
+            logger.warning("[debug] form filter log failed: %s", e)
+    # #endregion
 
     # Family context: debug small pool and ensure minimum results via relaxed fallback.
     if is_family_context and len(candidate_items) < config.FAMILY_MIN_RESULTS:
@@ -898,72 +973,157 @@ def recommend_shows(
         base_score = (rating_norm * config.RATING_WEIGHT) + (popularity_signal * (1.0 - config.RATING_WEIGHT))
 
         # Mood is required and the primary ranking factor (MoodFlix identity).
-        final_score = base_score
-        if item["mood_matched"]:
-            final_score *= config.MOOD_BOOST_MULTIPLIER
+        mood_mult = config.MOOD_BOOST_MULTIPLIER if item["mood_matched"] else 1.0
+        final_score = base_score * mood_mult
 
-        # Genre is optional: lighter multiplier when user selected genres and show matches.
+        # Genre: when user selected genres and show matches, apply multiplier. Form flow uses stronger weights.
         genre_score = 1.0
         if user_genres and common_genres:
-            genre_score = config.GENRE_BASE_MULTIPLIER + min(
-                config.GENRE_EXTRA_CAP, config.GENRE_EXTRA_PER_MATCH * (len(common_genres) - 1)
-            )
+            if source_path != "semantic":
+                genre_score = config.FORM_GENRE_BASE_MULTIPLIER + min(
+                    config.FORM_GENRE_EXTRA_CAP, config.FORM_GENRE_EXTRA_PER_MATCH * (len(common_genres) - 1)
+                )
+            else:
+                genre_score = config.GENRE_BASE_MULTIPLIER + min(
+                    config.GENRE_EXTRA_CAP, config.GENRE_EXTRA_PER_MATCH * (len(common_genres) - 1)
+                )
         final_score *= genre_score
 
         # Family context: boost animation, family, comedy (clean sitcoms, MasterChef-style, etc.).
-        if is_family_context and (show_genres & _FAMILY_FRIENDLY_GENRES):
-            final_score *= config.FAMILY_FRIENDLY_BOOST_MULTIPLIER
+        family_mult = config.FAMILY_FRIENDLY_BOOST_MULTIPLIER if (is_family_context and (show_genres & _FAMILY_FRIENDLY_GENRES)) else 1.0
+        final_score *= family_mult
 
         # Kids/Family: strong penalty for popular shows that lack Family/Kids/Animation tag.
-        if is_kids_or_family and not _show_has_family_kids_animation(show.get("genres", [])):
-            final_score *= config.KIDS_WITHOUT_FAMILY_PENALTY
+        kids_mult = config.KIDS_WITHOUT_FAMILY_PENALTY if (is_kids_or_family and not _show_has_family_kids_animation(show.get("genres", []))) else 1.0
+        final_score *= kids_mult
 
-        # Extra anti talk/variety bias for chill/familiar/happy reality expectations.
+        # Talk/variety/news: strong penalty for CHILL/HAPPY/FAMILIAR so scripted content ranks higher.
+        talk_mult = 1.0
         if user_input.mood in {Mood.CHILL, Mood.HAPPY, Mood.FAMILIAR} and (show_genres & _LOW_PRIORITY_GENRES):
-            final_score *= config.TALK_VARIETY_PENALTY
+            talk_mult = config.FORM_TALK_VARIETY_PENALTY if source_path != "semantic" else config.TALK_VARIETY_PENALTY
+        final_score *= talk_mult
 
         # Dark mood: penalize dramedies and light procedurals (comedy/family + crime).
-        if user_input.mood == Mood.DARK and (show_genres & {"comedy", "family"}):
-            final_score *= config.DARK_COMEDY_FAMILY_PENALTY
+        dark_mult = config.DARK_COMEDY_FAMILY_PENALTY if (user_input.mood == Mood.DARK and (show_genres & {"comedy", "family"})) else 1.0
+        final_score *= dark_mult
 
-        # English priority: original_language missing in DB; use title/overview heuristic.
-        show_language = _normalize_lang(show.get("original_language") or show.get("language"))
-        title_eng = _is_english_text(show.get("title"))
-        overview_eng = _is_english_text(show.get("overview") or show.get("tmdb_overview"))
-        if not user_input.language_preference and not foreign_intent:
+        # Language scoring: only in semantic/query path. Form flow does not use language.
+        lang_mult = 1.0
+        lang_reason = "none"
+        if source_path == "semantic" and not user_input.language_preference and not foreign_intent:
+            show_language = _normalize_lang(show.get("original_language") or show.get("language"))
+            title_eng = _is_english_text(show.get("title"))
+            overview_eng = _is_english_text(show.get("overview") or show.get("tmdb_overview"))
             if _is_english_language(show_language):
-                final_score *= config.ENGLISH_BOOST
+                lang_mult = config.ENGLISH_BOOST
+                lang_reason = "english_boost"
             elif title_eng and overview_eng:
-                # Assume English when title/overview are mostly ASCII.
-                final_score *= config.ENGLISH_HEURISTIC_BOOST
+                lang_mult = config.ENGLISH_HEURISTIC_BOOST
+                lang_reason = "english_heuristic"
             elif show_language:
                 if popularity_signal < config.NON_ENGLISH_PENALTY_POPULARITY_THRESHOLD and rating_norm < config.NON_ENGLISH_PENALTY_RATING_THRESHOLD:
-                    final_score *= config.NON_ENGLISH_STRONG_PENALTY
+                    lang_mult = config.NON_ENGLISH_STRONG_PENALTY
+                    lang_reason = "non_english_strong"
                 else:
-                    final_score *= config.NON_ENGLISH_SLIGHT_PENALTY
+                    lang_mult = config.NON_ENGLISH_SLIGHT_PENALTY
+                    lang_reason = "non_english_slight"
             elif not title_eng or not overview_eng:
-                # Non-ASCII text suggests non-English; slight penalty.
-                final_score *= config.NON_ASCII_PENALTY
+                lang_mult = config.NON_ASCII_PENALTY
+                lang_reason = "non_ascii"
+        final_score *= lang_mult
 
-        # Entropy: ±RANKING_NOISE_FRACTION so same mood does not always yield identical top 10.
-        noise = 1.0 + random.uniform(
-            -config.RANKING_NOISE_FRACTION,
-            config.RANKING_NOISE_FRACTION,
-        )
-        final_score = max(0.0, final_score * noise)
+        # Form flow only: modest quality/trust nudge. Prefer better-known, well-voted shows over obscure ones.
+        quality_mult = 1.0
+        if source_path != "semantic":
+            quality_mult = 1.0 + config.FORM_QUALITY_VOTE_COUNT_BOOST * vote_count_norm
+            if vote_count is not None and vote_count < config.FORM_LOW_VOTE_COUNT_THRESHOLD:
+                quality_mult *= config.FORM_LOW_VOTE_COUNT_PENALTY
+            final_score *= quality_mult
 
-        scored.append(
-            {
-                "score": final_score,
-                "show": show,
-                "recommendation_reason": item["recommendation_reason"],
+        # Entropy: ±RANKING_NOISE_FRACTION so same mood does not always yield identical order (semantic path only).
+        # Form flow: no noise so the top shortlist stays stable and quality-first.
+        if source_path == "semantic":
+            noise = 1.0 + random.uniform(
+                -config.RANKING_NOISE_FRACTION,
+                config.RANKING_NOISE_FRACTION,
+            )
+            final_score = max(0.0, final_score * noise)
+
+        final_score = max(0.0, final_score)
+        entry = {
+            "score": final_score,
+            "show": show,
+            "recommendation_reason": item["recommendation_reason"],
+        }
+        if source_path != "semantic":
+            entry["debug_components"] = {
+                "base_score": round(base_score, 4),
+                "mood_matched": item["mood_matched"],
+                "mood_mult": mood_mult,
+                "genre_score": round(genre_score, 4),
+                "family_mult": family_mult,
+                "kids_mult": kids_mult,
+                "talk_mult": talk_mult,
+                "dark_mult": dark_mult,
+                "language_reason": lang_reason,
+                "language_mult": lang_mult,
+                "quality_mult": round(quality_mult, 4),
+                "final_score": round(final_score, 4),
             }
-        )
+        scored.append(entry)
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     # In Family mode, take extra buffer so after output rating filter we still hit min results.
     take = max(1, int(top_n) * config.FAMILY_BUFFER_MULTIPLIER) if is_family_context else max(1, int(top_n))
     top_scored = scored[: take]
+
+    # #region agent log — form flow: top candidates with score breakdown
+    if source_path != "semantic" and top_scored:
+        try:
+            top_for_log = []
+            for i, item in enumerate(top_scored[:5]):
+                show = item["show"]
+                title = show.get("title") or "Unknown"
+                row = {
+                    "rank": i + 1,
+                    "title": title,
+                    "final_score": round(item["score"], 4),
+                    "original_language": show.get("original_language"),
+                    "language": show.get("language"),
+                }
+                if item.get("debug_components"):
+                    row["components"] = item["debug_components"]
+                top_for_log.append(row)
+            _debug_append_log({
+                "sessionId": "8701ad",
+                "location": "logic.py:recommend_shows",
+                "message": "form flow: top candidates with score breakdown",
+                "data": {"top_n": top_n, "top_candidates": top_for_log},
+                "hypothesisId": "form_top5",
+                "timestamp": __import__("time").time() * 1000,
+            })
+        except Exception as e:
+            logger.warning("[debug] form top5 log failed: %s", e)
+    # #endregion
+
+    # #region agent log — debug final ranked list for "sitcom about a workplace"
+    if debug_semantic_query:
+        try:
+            final_ranked = [
+                {"rank": i + 1, "title": item["show"].get("title"), "score": round(item["score"], 4)}
+                for i, item in enumerate(top_scored)
+            ]
+            _debug_append_log({
+                "sessionId": "8701ad",
+                "location": "logic.py:final_ranked",
+                "message": "final ranked list returned to frontend",
+                "data": {"query": query_text, "ranked": final_ranked, "count": len(final_ranked)},
+                "hypothesisId": "H2",
+                "timestamp": __import__("time").time() * 1000,
+            })
+        except Exception as e:
+            logger.warning("[debug] final ranked log failed: %s", e)
+    # #endregion
 
     tmdb_before = tmdb_adapter.get_cache_counters()
     if len(top_scored) <= 1:
