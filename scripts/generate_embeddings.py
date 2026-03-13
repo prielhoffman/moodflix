@@ -36,17 +36,11 @@ def _genres_to_string(genres: Any) -> str:
 
 
 def build_embedding_text(show: Show) -> str:
-    title = (show.title or "").strip()
-    overview = (show.overview or "").strip()
+    """Build a single text blob for embedding: title, genres, overview (same structure for every show)."""
+    title = (show.title or "").strip() or "Unknown"
     genres_str = _genres_to_string(show.genres)
-
-    lines = [f"Title: {title or 'Unknown'}"]
-    if genres_str:
-        lines.append(f"Genres: {genres_str}")
-    if overview:
-        lines.append(f"Overview: {overview}")
-
-    return "\n".join(lines)
+    overview = (show.overview or "").strip()
+    return f"Title: {title}. Genres: {genres_str}. Overview: {overview}"
 
 
 def parse_args() -> argparse.Namespace:
