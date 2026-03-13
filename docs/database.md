@@ -127,7 +127,7 @@ docker exec -it moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FRO
 Requires `TMDB_API_KEY` in `.env`. The ingest script fetches popular TV shows from TMDB and inserts them into `shows`:
 
 ```powershell
-python scripts/ingest_tmdb.py
+python -m scripts.ingest_tmdb
 ```
 
 - **TMDB_API_KEY** is required (get a free key from [themoviedb.org](https://www.themoviedb.org/settings/api)).
@@ -137,7 +137,7 @@ python scripts/ingest_tmdb.py
 Then (optional) generate embeddings for semantic search:
 
 ```powershell
-python scripts/generate_embeddings.py
+python -m scripts.generate_embeddings
 ```
 
 Use `--force` to regenerate all embeddings, or `--limit N` to process only N shows.
@@ -156,11 +156,11 @@ Or with a direct connection (e.g. `psql -U postgres -d moodflix`):
 SELECT COUNT(*), COUNT(embedding) FROM shows;
 ```
 
-If `COUNT(embedding)` is much smaller than `COUNT(*)`, run `python scripts/generate_embeddings.py` so recommendations with a search query return more than one result.
+If `COUNT(embedding)` is much smaller than `COUNT(*)`, run `python -m scripts.generate_embeddings` so recommendations with a search query return more than one result.
 
 ### If you see "Show not found" when adding by `show_id`
 
 That means the given `show_id` is not in `shows`. Either:
 
 - **Option A (current behavior):** Add by **title** instead of `show_id`; the backend will create a minimal `Show` row and then the watchlist item.
-- **Option B:** Seed the DB first (`python scripts/ingest_tmdb.py`) so recommendations return shows that exist in `shows`, and the frontend sends `show_id`.
+- **Option B:** Seed the DB first (`python -m scripts.ingest_tmdb`) so recommendations return shows that exist in `shows`, and the frontend sends `show_id`.

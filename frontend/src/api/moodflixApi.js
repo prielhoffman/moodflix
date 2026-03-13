@@ -123,6 +123,13 @@ function createApiError(message, status) {
 
 async function requestJson(path, options = {}) {
   const url = `${API_BASE}${path}`;
+  // #region agent log
+  if (path.indexOf('recommend') !== -1) {
+    const h2 = { path, url, method: options.method || 'GET' };
+    console.log('[debug 8701ad] requestJson recommend', h2);
+    fetch('http://127.0.0.1:7609/ingest/4aa64fda-f611-4355-a10b-bba242a9687f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8701ad'},body:JSON.stringify({sessionId:'8701ad',location:'moodflixApi.js:requestJson',message:'requestJson recommend',data:h2,hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
   const token = getAccessToken();
   const headers = {
     "Content-Type": "application/json",
@@ -220,18 +227,15 @@ export async function fetchMe() {
 /* ================= RECOMMENDATIONS ================= */
 
 export async function recommendShows(preferences) {
-  const data = await tryPaths(
-    [
-      "/recommend",
-      "/api/recommend",
-      "/recommendations",
-      "/api/recommendations",
-    ],
-    {
-      method: "POST",
-      body: JSON.stringify(preferences),
-    }
-  );
+  // #region agent log
+  const h1 = { pathUsed: '/recommend', apiBase: API_BASE };
+  console.log('[debug 8701ad] recommendShows', h1);
+  fetch('http://127.0.0.1:7609/ingest/4aa64fda-f611-4355-a10b-bba242a9687f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8701ad'},body:JSON.stringify({sessionId:'8701ad',location:'moodflixApi.js:recommendShows',message:'recommendShows called',data:h1,hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const data = await requestJson("/recommend", {
+    method: "POST",
+    body: JSON.stringify(preferences),
+  });
 
   const shows = Array.isArray(data)
     ? data

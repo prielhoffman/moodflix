@@ -174,8 +174,8 @@ Edit `.env`:
 ### 3. Backend
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+python -m venv venv
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 uvicorn app.api:app --reload
 ```
@@ -198,9 +198,10 @@ npm run dev
 For DB-backed recommendations:
 
 ```powershell
-python scripts/ingest_tmdb.py
-python scripts/generate_embeddings.py
+python -m scripts.ingest_tmdb
+python -m scripts.generate_embeddings
 ```
+(Requires `TMDB_API_KEY` in `.env` for the ingest script. Run from project root.)
 
 See [docs/setup.md](docs/setup.md) for detailed Windows setup.
 

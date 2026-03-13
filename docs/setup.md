@@ -343,13 +343,13 @@ To get DB-backed recommendations instead of the static fallback:
 
 ```powershell
 # 1. Set TMDB_API_KEY in .env, then:
-python scripts/ingest_tmdb.py
+python -m scripts.ingest_tmdb
 
 # 2. Verify show count (see docs/database.md for Docker vs local Postgres commands)
 docker exec moodflix-db psql -U postgres -d moodflix -c "SELECT COUNT(*) FROM shows;"
 
 # 3. Generate embeddings for semantic search
-python scripts/generate_embeddings.py
+python -m scripts.generate_embeddings
 ```
 
 See [docs/database.md](database.md) for details. If the DB has fewer than 50 shows, recommendations use the static fallback automatically.

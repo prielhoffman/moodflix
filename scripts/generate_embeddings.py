@@ -1,17 +1,11 @@
 """
 Generate and store embeddings for shows in the same Postgres DB that FastAPI uses.
-Run from project root with the same .env so the script connects to the same database.
+Run from project root: python -m scripts.generate_embeddings
+Uses the same .env so the script connects to the same database.
 Commits update shows.embedding for many rows.
 """
 import argparse
-import sys
-from pathlib import Path
 from typing import Any
-
-# Allow running this script directly: `python scripts/generate_embeddings.py`
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
 from app.db import SessionLocal
 from app.embeddings import EMBED_DIM, embed_texts
