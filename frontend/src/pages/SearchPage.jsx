@@ -30,7 +30,7 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
     setHasSearched(true);
 
     try {
-      const data = await semanticSearch(trimmed, 12);
+      const data = await semanticSearch(trimmed, 5);
       setResults(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
