@@ -312,6 +312,10 @@ function scrollCarousel(direction) {
   }
 
   function handleAuthSuccess(user) {
+    setRecommendations([]);
+    setLastRecommendationInput(null);
+    setIsLoading(false);
+    setError(null);
     setAuthUser(user);
     loadWatchlist().catch(() => setError("Logged in, but failed to load watchlist."));
     closeAuthModal();

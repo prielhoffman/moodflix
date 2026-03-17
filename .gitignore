@@ -12,3 +12,6 @@ node_modules/
 # IDE
 .idea/
 .vscode/
+
+debug-8701ad.log
+.cursor/debug-8701ad.log
