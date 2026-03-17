@@ -1,21 +1,12 @@
 import { useState } from "react";
 import { semanticSearch } from "../api/moodflixApi";
 
-function getFitLabel(distance) {
-  const value = Number(distance);
-  if (Number.isNaN(value) || !Number.isFinite(value)) return null;
-  if (value <= 0.18) return "Excellent fit";
-  if (value <= 0.26) return "Strong fit";
-  if (value <= 0.36) return "Good fit";
-  return "Related result";
-}
-
-function getScoreClass(distance) {
-  const value = Number(distance);
-  if (Number.isNaN(value) || !Number.isFinite(value)) return "";
-  if (value <= 0.26) return "score-high";
-  if (value <= 0.36) return "score-medium";
-  return "score-low";
+function extractReason(reasonString) {
+  const text = String(reasonString || "").trim();
+  if (!text) return "Matches your search description.";
+  const parts = text.split(/\s*-\s*/);
+  const explanation = parts.length > 1 ? parts.slice(1).join(" - ").trim() : text;
+  return explanation || "Matches your search description.";
 }
 
 function SearchPage({ isSaved, onToggleSave, savingTitle }) {
@@ -93,8 +84,7 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
         {!isLoading && results.length > 0 && (
           <div className="search-results-grid">
             {results.map((show) => {
-              const fitLabel = getFitLabel(show.distance);
-              const scoreClass = getScoreClass(show.distance);
+              const reasonText = extractReason(show.ai_match_reason);
               const saved = typeof isSaved === "function" ? isSaved(show.title) : false;
 
               return (
@@ -119,9 +109,9 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
                       <span className="rating-star">★</span> {Number(show.vote_average).toFixed(1)}
                     </p>
                   )}
-                  {fitLabel && (
+                  {reasonText && (
                     <p className="match-reason">
-                      <span className={`match-score ${scoreClass}`}>{fitLabel}</span>
+                      {reasonText}
                     </p>
                   )}
                   {show.overview && <p>{show.overview}</p>}
