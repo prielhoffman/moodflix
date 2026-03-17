@@ -1,23 +1,20 @@
 import { useState } from "react";
 import { semanticSearch } from "../api/moodflixApi";
 
-function parseMatchScore(reason) {
-  const match = String(reason || "").match(/Match Score:\s*(\d+)%/i);
-  if (!match) return null;
-  return Number(match[1]);
-}
-
-function scoreFromDistance(distance) {
+function getFitLabel(distance) {
   const value = Number(distance);
   if (Number.isNaN(value) || !Number.isFinite(value)) return null;
-  const score = Math.round((1 - value) * 100);
-  return Math.max(0, Math.min(100, score));
+  if (value <= 0.18) return "Excellent fit";
+  if (value <= 0.26) return "Strong fit";
+  if (value <= 0.36) return "Good fit";
+  return "Related result";
 }
 
-function getScoreClass(score) {
-  if (typeof score !== "number" || Number.isNaN(score)) return "";
-  if (score >= 80) return "score-high";
-  if (score >= 60) return "score-medium";
+function getScoreClass(distance) {
+  const value = Number(distance);
+  if (Number.isNaN(value) || !Number.isFinite(value)) return "";
+  if (value <= 0.26) return "score-high";
+  if (value <= 0.36) return "score-medium";
   return "score-low";
 }
 
@@ -96,8 +93,8 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
         {!isLoading && results.length > 0 && (
           <div className="search-results-grid">
             {results.map((show) => {
-              const score = parseMatchScore(show.ai_match_reason) ?? scoreFromDistance(show.distance);
-              const scoreClass = getScoreClass(score);
+              const fitLabel = getFitLabel(show.distance);
+              const scoreClass = getScoreClass(show.distance);
               const saved = typeof isSaved === "function" ? isSaved(show.title) : false;
 
               return (
@@ -122,9 +119,9 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
                       <span className="rating-star">★</span> {Number(show.vote_average).toFixed(1)}
                     </p>
                   )}
-                  {typeof score === "number" && (
+                  {fitLabel && (
                     <p className="match-reason">
-                      <span className={`match-score ${scoreClass}`}>Match Score: {score}%</span>
+                      <span className={`match-score ${scoreClass}`}>{fitLabel}</span>
                     </p>
                   )}
                   {show.overview && <p>{show.overview}</p>}
