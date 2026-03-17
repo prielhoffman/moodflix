@@ -142,6 +142,59 @@
 
 /* ================= MOOD SECTION ================= */
 
+.guest-content-preference-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.guest-content-preference-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 0.5rem;
+}
+
+.guest-content-preference-options {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.guest-content-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.guest-content-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.guest-content-option.selected {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.guest-content-preference-hint {
+  margin: 0.5rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
 .guest-mood-section {
   padding: 3.5rem 2rem;
   max-width: 1200px;

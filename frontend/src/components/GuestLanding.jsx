@@ -14,9 +14,9 @@ function GuestLanding({
   onScrollCarousel,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [guestOver18, setGuestOver18] = useState(false);
+  const [contentPreference, setContentPreference] = useState("family");
 
-  const guestFamilySafe = !guestOver18;
+  const guestFamilySafe = contentPreference === "family";
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -40,10 +40,37 @@ function GuestLanding({
         onSearchByDescription={handleSearchByDescription}
       />
 
+      <section className="guest-content-preference-wrap" aria-label="Guest recommendation content preference">
+        <p className="guest-content-preference-label">Content preference</p>
+        <div className="guest-content-preference-options" role="radiogroup" aria-label="Content preference">
+          <label className={`guest-content-option ${contentPreference === "family" ? "selected" : ""}`}>
+            <input
+              type="radio"
+              name="content_preference"
+              value="family"
+              checked={contentPreference === "family"}
+              onChange={() => setContentPreference("family")}
+            />
+            <span>Family-friendly</span>
+          </label>
+          <label className={`guest-content-option ${contentPreference === "adult" ? "selected" : ""}`}>
+            <input
+              type="radio"
+              name="content_preference"
+              value="adult"
+              checked={contentPreference === "adult"}
+              onChange={() => setContentPreference("adult")}
+            />
+            <span>Adult okay</span>
+          </label>
+        </div>
+        <p className="guest-content-preference-hint">This affects which shows we recommend.</p>
+      </section>
+
       <MoodSelector
         onMoodSelect={(mood) => {
           // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'GuestLanding.jsx:onMoodSelect',message:'mood button clicked',data:{mood,guestFamilySafe,guestOver18},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+          fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'GuestLanding.jsx:onMoodSelect',message:'mood button clicked',data:{mood,guestFamilySafe,contentPreference},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
           // #endregion
           onGuestMood(mood, guestFamilySafe);
         }}
@@ -68,20 +95,6 @@ function GuestLanding({
             {isLoading ? "Finding…" : "Find shows"}
           </button>
         </form>
-        <div className="home-age-toggle guest-age-toggle">
-          <label className="home-age-label">
-            <input
-              type="checkbox"
-              checked={guestOver18}
-              onChange={(e) => setGuestOver18(e.target.checked)}
-              aria-label="I am 18 or older"
-            />
-            <span>I am 18 or older</span>
-          </label>
-          <p className="home-age-hint">
-            If unchecked, we&apos;ll show family-friendly recommendations only.
-          </p>
-        </div>
       </section>
 
       {(error || (isLoading && recommendations.length === 0)) && (
