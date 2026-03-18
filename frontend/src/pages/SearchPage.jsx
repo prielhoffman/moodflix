@@ -45,8 +45,10 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
     <section className="content-section">
       <div className="content-wrapper">
         <div className="search-hero">
-          <h2>Search</h2>
-          <p>Type a free-text vibe like "small town crime series" and MoodFlix will find close matches.</p>
+          <h2 className="page-title">Search by description</h2>
+          <p className="page-subtitle">
+            Describe the kind of show you want and we&apos;ll find the closest matches.
+          </p>
 
           <form className="search-form" onSubmit={handleSubmit}>
             <input

@@ -7,7 +7,10 @@ function WatchlistPage({
   return (
     <section className="content-section">
       <div className="content-wrapper">
-        <h2>My Watchlist</h2>
+        <div className="page-intro">
+          <h2 className="page-title">Your watchlist</h2>
+          <p className="page-subtitle">Shows you&apos;ve saved for later.</p>
+        </div>
 
         {!authUser && (
           <div className="empty-watchlist">
