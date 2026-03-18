@@ -134,33 +134,31 @@
   background: rgba(99, 102, 241, 0.15);
 }
 
-/* Guest home: light header */
+/* Guest home: keep same product shell */
 .header-guest {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(2, 6, 23, 0.95);
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .header-guest .logo {
-  color: #0f172a;
+  color: #e2e8f0;
 }
 
 .header-guest .auth-button {
-  background: #dc2626;
+  background: #6366f1;
 }
 
 .header-guest .auth-button:hover {
-  background: #b91c1c;
+  background: #4f46e5;
 }
 
 .header-guest .auth-button.secondary {
-  border-color: #e2e8f0;
-  color: #475569;
+  border-color: #6366f1;
+  color: #c7d2fe;
 }
 
 .header-guest .auth-button.secondary:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: rgba(99, 102, 241, 0.15);
 }
 
