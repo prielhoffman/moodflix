@@ -51,7 +51,6 @@ function Header({
           {authUser ? (
             <UserMenu
               userDisplayName={userDisplayName}
-              onSemanticSearchClick={onGoToSemanticSearch}
               onProfileClick={onOpenProfile}
               onLogoutClick={onLogout}
             />

@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
 import "./UserMenu.css";
 
 function UserMenu({
   userDisplayName,
-  onSemanticSearchClick,
   onProfileClick,
   onLogoutClick,
 }) {
@@ -61,25 +59,6 @@ function UserMenu({
             minWidth: Math.max(triggerRect.width, 200),
           }}
         >
-          <Link
-            to="/watchlist"
-            className="user-menu-item"
-            role="menuitem"
-            onClick={close}
-          >
-            My Watchlist
-          </Link>
-          <Link
-            to="/search"
-            className="user-menu-item"
-            role="menuitem"
-            onClick={() => {
-              close();
-              onSemanticSearchClick?.();
-            }}
-          >
-            Semantic Search
-          </Link>
           <button
             type="button"
             className="user-menu-item"
