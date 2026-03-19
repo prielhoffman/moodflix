@@ -11,9 +11,9 @@ MoodFlix helps users find TV shows quickly by combining:
 - **Mood-based recommendations** – Chill, Adrenaline, Curious, etc.
 - **Constraint filtering** – Age, binge preference, episode length, genres, watching context
 - **Semantic search** – Natural-language queries (e.g. "cozy mystery with a twist")
-- **Per-user watchlists** – Save and manage shows (JWT auth)
+- **Per-user favorites** – Like and manage shows (JWT auth; API: /watchlist)
 
-The system supports both **authenticated** and **guest** flows. Guests get a limited landing page with quick mood buttons and text search; authenticated users get the full recommendation form, semantic search, and watchlist.
+The system supports both **authenticated** and **guest** flows. Guests get a limited landing page with quick mood buttons and text search; authenticated users get the full recommendation form, semantic search, and favorites.
 
 ---
 
@@ -25,7 +25,7 @@ The system supports both **authenticated** and **guest** flows. Guests get a lim
 | **Semantic search** | `POST /search/semantic` – Vector similarity over show embeddings (pgvector) |
 | **More like this** | `POST /search/more-like-this` – Similar shows by `show_id` |
 | **Auth** | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` – JWT |
-| **Watchlist** | `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required) |
+| **Favorites** | `GET /watchlist`, `POST /watchlist/add`, `POST /watchlist/remove` (JWT required) |
 | **TMDB enrichment** | Optional write-through cache for posters, ratings, overviews |
 | **Guest flow** | Quick mood buttons (Chill, Adrenaline, Curious) + text search on landing page |
 
@@ -66,9 +66,9 @@ flowchart TB
 
 | Component | Role |
 |-----------|------|
-| **Frontend (React)** | User interface, auth state, recommendation form, guest landing, watchlist |
-| **Backend API (FastAPI)** | REST endpoints, auth, recommendation logic, semantic search, watchlist, TMDB enrichment |
-| **Database (PostgreSQL + pgvector)** | Users, shows, watchlist items, vector embeddings (384-dim) |
+| **Frontend (React)** | User interface, auth state, recommendation form, guest landing, favorites |
+| **Backend API (FastAPI)** | REST endpoints, auth, recommendation logic, semantic search, favorites (API: /watchlist), TMDB enrichment |
+| **Database (PostgreSQL + pgvector)** | Users, shows, favorites (watchlist_items), vector embeddings (384-dim) |
 | **Embeddings pipeline** | `scripts/generate_embeddings.py` – Local sentence-transformers, batch writes to `shows.embedding` |
 | **TMDB ingestion** | `scripts/ingest_tmdb.py` – Seeds `shows` from TMDB (requires `TMDB_API_KEY`) |
 

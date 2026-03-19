@@ -1,6 +1,6 @@
 # Recommendation Pipeline: Single-Result Troubleshooting
 
-When the DB has fewer than 50 rows, the system uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (e.g. only 1 row from a watchlist add-by-title flow).
+When the DB has fewer than 50 rows, the system uses the static fallback instead of the DB. This prevents the "1 result" issue when the DB is under-seeded (e.g. only 1 row from a favorites add-by-title flow).
 
 ## Diagnostics (form flow: only 1 recommendation)
 
@@ -35,7 +35,7 @@ After submitting the recommendations form, check server logs for these lines to 
 
 - **When there is no `query`** (e.g. preference form "Get recommendations"):
   - We load **all** shows from the DB: `_load_shows_from_db(db)` (no embedding filter).
-  - **Under-seeded fallback:** If the DB has **fewer than 50 rows** (`SEMANTIC_MIN_EMBEDDINGS`), we use the static dataset instead. This prevents the "1 result" bug when the DB has only 1–2 rows (e.g. from watchlist add-by-title).
+  - **Under-seeded fallback:** If the DB has **fewer than 50 rows** (`SEMANTIC_MIN_EMBEDDINGS`), we use the static dataset instead. This prevents the "1 result" bug when the DB has only 1–2 rows (e.g. from favorites add-by-title).
   - So the candidate pool is either the full `shows` table (when ≥ 50 rows) or the static dataset (~50 shows).
 
 - **Fallback** (general):
@@ -83,7 +83,7 @@ So: **only one result often means only one (or very few) DB row has an embedding
 - **Strict genre + binge + language + kids/family** can leave very few candidates.
 - If the DB is small or filters are strict, you can end up with **one candidate** after the loop; then you get one result.
 
-There is **no** watchlist-based filtering in this logic; we do not exclude already-saved shows.
+There is **no** favorites-based filtering in this logic; we do not exclude already-liked shows.
 
 ---
 

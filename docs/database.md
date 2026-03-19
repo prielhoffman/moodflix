@@ -114,7 +114,7 @@ After any model change, add a new migration with `alembic revision --autogenerat
 
 ## 4. Verify and seed the `shows` table
 
-Recommendations use the **static fallback** when the `shows` table is **empty or under-seeded** (fewer than 50 rows). This ensures a sufficient candidate pool for scoring; otherwise a DB with 1–2 rows (e.g. from watchlist add-by-title) would return only 1–2 recommendations. **Watchlist Save** still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` with at least 50 rows (200+ recommended for production-like behavior).
+Recommendations use the **static fallback** when the `shows` table is **empty or under-seeded** (fewer than 50 rows). This ensures a sufficient candidate pool for scoring; otherwise a DB with 1–2 rows (e.g. from favorites add-by-title) would return only 1–2 recommendations. **Favorites** (API: /watchlist) still works: adding by **title** creates a minimal row in `shows` (Option A). If you want recommendations to be DB-backed (and have `show_id` in responses), seed `shows` with at least 50 rows (200+ recommended for production-like behavior).
 
 ### Check if `shows` has rows
 
@@ -162,5 +162,5 @@ If `COUNT(embedding)` is much smaller than `COUNT(*)`, run `python -m scripts.ge
 
 That means the given `show_id` is not in `shows`. Either:
 
-- **Option A (current behavior):** Add by **title** instead of `show_id`; the backend will create a minimal `Show` row and then the watchlist item.
+- **Option A (current behavior):** Add by **title** instead of `show_id`; the backend will create a minimal `Show` row and then the favorites item.
 - **Option B:** Seed the DB first (`python -m scripts.ingest_tmdb`) so recommendations return shows that exist in `shows`, and the frontend sends `show_id`.

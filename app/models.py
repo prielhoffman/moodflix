@@ -17,11 +17,12 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    watchlist_items = relationship("WatchlistItem", back_populates="user")
+    watchlist_items = relationship("WatchlistItem", back_populates="user")  # User-facing: Favorites
 
 
 class WatchlistItem(Base):
-    """Step 3: watchlist_items. New inserts must always include show_id (API enforces).
+    """Favorites (user-facing). Internal table: watchlist_items.
+    show_id: nullable for legacy compatibility only; new writes must include show_id (API enforces).
     title is legacy/fallback only. Partial unique (user_id, show_id) when show_id IS NOT NULL.
     FK to shows uses ON DELETE CASCADE."""
 
@@ -32,7 +33,7 @@ class WatchlistItem(Base):
         Integer,
         ForeignKey("shows.id", ondelete="CASCADE"),
         index=True,
-        nullable=True,
+        nullable=True,  # Legacy only; new inserts must set show_id (API enforces)
     )
     title = Column(String, nullable=True)  # Legacy/fallback; denormalized from Show for display
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -71,4 +72,4 @@ class Show(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    watchlist_items = relationship("WatchlistItem", back_populates="show")
+    watchlist_items = relationship("WatchlistItem", back_populates="show")  # User-facing: Favorites

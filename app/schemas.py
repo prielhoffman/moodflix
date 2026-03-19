@@ -76,7 +76,7 @@ class RecommendationInput(BaseModel):
 
 # --------------------------------- OUTPUT ---------------------------------
 class RecommendationOutput(BaseModel):
-    id: Optional[int] = Field(None, description="Show ID (shows.id) when from DB; for watchlist add by show_id")
+    id: Optional[int] = Field(None, description="Show ID (shows.id) when from DB; for favorites add by show_id")
     title: str = Field(..., description="Title of the TV show")
 
     recommendation_reason: Optional[str] = Field(
@@ -137,7 +137,8 @@ class RecommendationOutput(BaseModel):
     )
 
 
-# --------------------------------- WATCHLIST ---------------------------------
+# --------------------------------- FAVORITES (API: /watchlist) ---------------------------------
+# Internal names remain watchlist_* for backwards compatibility; user-facing term is Favorites.
 
 
 class SaveRequest(BaseModel):
@@ -147,7 +148,7 @@ class SaveRequest(BaseModel):
 
 
 class WatchlistAddRequest(BaseModel):
-    """Add by show_id (preferred) or by title when show_id is missing (e.g. recommendations from static data)."""
+    """Add to favorites by show_id (preferred) or by title when show_id is missing (e.g. recommendations from static data)."""
 
     show_id: Optional[int] = Field(None, ge=1, description="ID of the show (shows.id) to add")
     title: Optional[str] = Field(None, description="Title of the show to add (used when show_id not provided)")
@@ -161,7 +162,7 @@ class WatchlistAddRequest(BaseModel):
 
 
 class WatchlistRemoveRequest(BaseModel):
-    """Step 3: Prefer show_id. title is legacy for pre-migration items. TODO V2: deprecate remove-by-title."""
+    """Remove from favorites. Prefer show_id. title is legacy for pre-migration items. TODO V2: deprecate remove-by-title."""
 
     show_id: Optional[int] = Field(None, ge=1, description="ID of the show to remove (preferred)")
     title: Optional[str] = Field(None, description="Legacy: title of the show to remove (when show_id not set)")
@@ -174,9 +175,9 @@ class WatchlistRemoveRequest(BaseModel):
 
 
 class WatchlistItemOut(BaseModel):
-    """Step 3: show_id null for legacy items; title from show relation or denormalized."""
+    """Favorites entry. show_id null for legacy items; title from show relation or denormalized."""
 
-    show_id: Optional[int] = Field(None, description="ID of the show (null for legacy items)")
+    show_id: Optional[int] = Field(None, description="ID of the show (null for legacy items only)")
     title: str = Field(..., description="Show title (from show relation or denormalized)")
     poster_url: Optional[str] = Field(None, description="Poster URL when available from show")
 
@@ -184,7 +185,7 @@ class WatchlistItemOut(BaseModel):
 class WatchlistResponse(BaseModel):
     watchlist: List[WatchlistItemOut] = Field(
         default_factory=list,
-        description="List of watchlist entries",
+        description="List of favorites (internal key: watchlist for API compatibility)",
     )
 
 # --------------------------------- AUTH ---------------------------------

@@ -1,4 +1,4 @@
-"""Watchlist API. Add by show_id (preferred) or title; remove supports show_id (preferred) or title (legacy)."""
+"""Favorites API (routes: /watchlist). User-facing: Favorites. Add by show_id (preferred) or title; remove supports show_id (preferred) or title (legacy)."""
 
 import hashlib
 import logging
