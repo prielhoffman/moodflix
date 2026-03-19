@@ -42,7 +42,7 @@ function Header({
               to="/watchlist"
               className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
             >
-              Watchlist
+              Favorites
             </NavLink>
           </nav>
         )}

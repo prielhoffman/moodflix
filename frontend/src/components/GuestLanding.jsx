@@ -30,9 +30,9 @@ function GuestLanding({
       <section className="page-intro-band guest-intro-band">
         <div className="guest-intro-content">
           <p className="guest-eyebrow">Mood-based TV discovery</p>
-          <h1 className="guest-hero-title">Find your next show by vibe</h1>
+          <h1 className="guest-hero-title">Find your next show by mood</h1>
           <p className="guest-hero-subtitle">
-            Tell MoodFlix how you feel, explore a few curated picks, and sign in to save what you love.
+            Pick a mood, explore recommendations, and sign in to save your favorites.
           </p>
         </div>
       </section>
@@ -41,7 +41,7 @@ function GuestLanding({
         <section className="guest-controls-panel">
           <div className="guest-section-header">
             <h2>Start with a mood</h2>
-            <p>Pick a vibe and get a focused set of guest recommendations.</p>
+            <p>Pick a mood and get a focused set of guest recommendations.</p>
           </div>
 
           <div className="guest-content-preference-wrap" aria-label="Guest recommendation content preference">
@@ -125,7 +125,7 @@ function GuestLanding({
             {!isLoading && !error && recommendations.length === 0 && (
               <div className="guest-empty-state">
                 <h3>Pick a mood to get started</h3>
-                <p>Choose a vibe above and MoodFlix will suggest a quick set of shows.</p>
+                <p>Choose a mood above and MoodFlix will suggest a quick set of shows.</p>
               </div>
             )}
 

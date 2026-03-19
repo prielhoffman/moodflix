@@ -24,7 +24,7 @@ function RecommendPage({
           <p className="page-eyebrow">Recommendations</p>
           <h1 className="page-title">Find your next show by mood</h1>
           <p className="page-subtitle">
-            Pick a vibe, refine the tone, and get a focused set of shows to try next.
+            Pick a mood, refine the tone, and get a focused set of shows to try next.
           </p>
         </section>
 
@@ -83,7 +83,7 @@ function RecommendPage({
                           onClick={() => onToggleSave(show)}
                           disabled={savingTitle === show.title}
                         >
-                          {saved ? "❤️ Saved" : "♡ Save"}
+                          {saved ? "❤️ Liked" : "♡ Like"}
                         </button>
 
                         {show.poster_url ? (

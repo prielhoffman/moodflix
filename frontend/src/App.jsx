@@ -285,7 +285,7 @@ function scrollCarousel(direction) {
     const msg = String(err?.message || "").trim();
 
     if (status === 401 || status === 403 || msg.toLowerCase().includes("credentials") || msg.toLowerCase().includes("unauthorized")) {
-      setAuthContextMessage("Please log in or register to save to your watchlist.");
+      setAuthContextMessage("Please log in or register to save to your favorites.");
       openAuthModal("login");
       return;
     }
@@ -294,7 +294,7 @@ function scrollCarousel(direction) {
       setError(msg);
       return;
     }
-    setError(msg || "Could not update watchlist. Please try again.");
+    setError(msg || "Could not update favorites. Please try again.");
   }
 
   function openAuthModal(tab, contextMessage = null) {
@@ -317,7 +317,7 @@ function scrollCarousel(direction) {
     setIsLoading(false);
     setError(null);
     setAuthUser(user);
-    loadWatchlist().catch(() => setError("Logged in, but failed to load watchlist."));
+      loadWatchlist().catch(() => setError("Logged in, but failed to load favorites."));
     closeAuthModal();
     navigate("/");
   }
@@ -346,7 +346,7 @@ function scrollCarousel(direction) {
     if (savingTitle) return;
 
     if (!hasAccessToken()) {
-      openAuthModal("login", "Please log in or register to save to your watchlist.");
+      openAuthModal("login", "Please log in or register to save to your favorites.");
       return;
     }
 
@@ -354,7 +354,7 @@ function scrollCarousel(direction) {
     const hasValidId = id != null && Number(id) > 0;
     const hasTitle = title && String(title).trim() !== "";
     if (!isSaved(show) && !hasValidId && !hasTitle) {
-      setError("This show isn't in the catalog and can't be added to the watchlist.");
+      setError("This show isn't in the catalog and can't be added to your favorites.");
       return;
     }
 

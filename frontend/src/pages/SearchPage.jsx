@@ -123,7 +123,7 @@ function SearchPage({ isSaved, onToggleSave, savingTitle }) {
                         onClick={() => onToggleSave?.(show)}
                         disabled={savingTitle === show.title}
                       >
-                        {saved ? "❤️ Saved" : "♡ Save"}
+                        {saved ? "❤️ Liked" : "♡ Like"}
                       </button>
                       {show.poster_url ? (
                         <img src={show.poster_url} alt={show.title} className="poster-image" />

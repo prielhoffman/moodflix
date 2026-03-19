@@ -12,8 +12,8 @@ function WatchlistPage({
     <section className="content-section watchlist-content-section">
       <div className="watchlist-page">
         <section className="page-intro-band">
-          <p className="page-eyebrow">Watchlist</p>
-          <h1 className="page-title">Your saved shows</h1>
+          <p className="page-eyebrow">Favorites</p>
+          <h1 className="page-title">Your favorites</h1>
           <p className="page-subtitle">
             Keep track of the series you want to come back to later.
           </p>
@@ -21,7 +21,7 @@ function WatchlistPage({
 
         <section className="watchlist-summary-row">
           <div className="watchlist-summary-card">
-            <span className="watchlist-summary-label">Saved shows</span>
+            <span className="watchlist-summary-label">Favorite shows</span>
             <strong className="watchlist-summary-value">{savedCount}</strong>
           </div>
         </section>
@@ -30,14 +30,14 @@ function WatchlistPage({
           <div className="watchlist-results-header">
             <div>
               <h2>Your collection</h2>
-              <p>Shows you saved from recommendations and search.</p>
+              <p>Shows you liked from recommendations and search.</p>
             </div>
           </div>
 
           <div className="watchlist-results-body">
             {!authUser && (
               <div className="watchlist-empty-state">
-                <h3>Please log in to view your watchlist</h3>
+                <h3>Please log in to view your favorites</h3>
                 <button className="primary-button watchlist-empty-action" onClick={onOpenLogin}>
                   Login
                 </button>
@@ -46,8 +46,8 @@ function WatchlistPage({
 
             {authUser && savedCount === 0 && (
               <div className="watchlist-empty-state">
-                <h3>Your watchlist is empty</h3>
-                <p>Save shows from recommendations or search to build your collection.</p>
+                <h3>Your favorites are empty</h3>
+                <p>Like shows from recommendations or search to build your collection.</p>
                 <div className="watchlist-empty-actions">
                   <Link className="primary-button watchlist-empty-action" to="/recommend">
                     Browse recommendations
@@ -75,12 +75,12 @@ function WatchlistPage({
 
                     <div className="watchlist-card-content">
                       <h3>{show.title}</h3>
-                      <p>Saved for later</p>
+                      <p>In favorites</p>
                       <button
                         className="remove-button"
                         onClick={() => onRemoveFromWatchlist(show)}
                       >
-                        Remove from watchlist
+                        Remove from favorites
                       </button>
                     </div>
                   </article>
