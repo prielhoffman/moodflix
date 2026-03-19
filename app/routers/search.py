@@ -62,6 +62,16 @@ def normalize_genres(value) -> list[str]:
     return out
 
 
+# Stopwords to exclude from explanation overlap logic (avoids "themes around 'about'").
+_STOPWORDS = frozenset({
+    "about", "the", "and", "for", "with", "that", "this", "like", "from", "into",
+    "when", "what", "where", "who", "how", "some", "any", "have", "has", "had",
+    "been", "being", "which", "were", "are", "was", "not", "just", "only", "more",
+    "most", "other", "such", "than", "then", "them", "their", "there", "these",
+    "they", "will", "would", "could", "should", "does", "done",
+})
+
+
 def _tokenize(text: str | None) -> set[str]:
     if not text:
         return set()
@@ -101,11 +111,13 @@ HYBRID_KEYWORD_POOL_MULTIPLIER = 2  # fetch 2x top_k from keyword search
 HYBRID_SEMANTIC_WEIGHT = 0.6  # weight for semantic similarity (1 - distance)
 HYBRID_KEYWORD_WEIGHT = 0.4   # weight for keyword match score
 DEFAULT_DISTANCE_WHEN_NO_SEMANTIC = 0.5  # used for keyword-only candidates in response
+RELEVANCE_FLOOR_COMBINED_SCORE = 0.32  # exclude weak matches; may return fewer than top_k
 
 
 def _query_terms(query: str) -> list[str]:
-    """Tokenize query into words (alphanumeric, length > 2) for keyword matching."""
-    return [t for t in re.findall(r"[a-z0-9]+", query.lower()) if len(t) > 2]
+    """Tokenize query into words (alphanumeric, length > 2) for keyword matching. Excludes stopwords."""
+    raw = [t for t in re.findall(r"[a-z0-9]+", query.lower()) if len(t) > 2]
+    return [t for t in raw if t not in _STOPWORDS]
 
 
 def _keyword_match_count(show: Show, terms: list[str]) -> int:
@@ -140,7 +152,7 @@ def _fetch_keyword_candidates(db: Session, query: str, limit: int) -> list[tuple
 
 
 def _build_fallback_match_reason(query: str, title: str, genres: list[str], overview: str | None, distance: float | None) -> str:
-    query_tokens = _tokenize(query)
+    query_tokens = _tokenize(query) - _STOPWORDS
     title_tokens = _tokenize(title)
     overview_tokens = _tokenize(overview)
     genre_tokens = _tokenize(" ".join(genres))
@@ -244,10 +256,11 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
         return HYBRID_SEMANTIC_WEIGHT * semantic_score + HYBRID_KEYWORD_WEIGHT * keyword_norm
 
     sorted_entries = sorted(merged.values(), key=_combined_score, reverse=True)[:top_k]
+    filtered_entries = [e for e in sorted_entries if _combined_score(e) >= RELEVANCE_FLOOR_COMBINED_SCORE]
 
     # --- 5. Build response: SemanticSearchResult with real or default distance ---
     results: list[SemanticSearchResult] = []
-    for entry in sorted_entries:
+    for entry in filtered_entries:
         show = entry["show"]
         dist = entry["semantic_distance"]
         distance_value = dist if dist is not None else DEFAULT_DISTANCE_WHEN_NO_SEMANTIC

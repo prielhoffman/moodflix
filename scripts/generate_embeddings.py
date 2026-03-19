@@ -35,12 +35,92 @@ def _genres_to_string(genres: Any) -> str:
     return ", ".join(out)
 
 
+def _genres_to_list(genres: Any) -> list[str]:
+    """Return lowercase genre names for descriptor inference."""
+    if not genres or not isinstance(genres, list):
+        return []
+    out: list[str] = []
+    for g in genres:
+        if isinstance(g, int):
+            name = TMDB_TV_GENRE_ID_TO_NAME.get(g)
+            if name:
+                out.append(name)
+        elif isinstance(g, str) and g.strip():
+            out.append(g.strip().lower())
+    return out
+
+
+def _infer_embedding_descriptors(overview: str | None, genres: list[str]) -> list[str]:
+    """
+    Infer setting/theme descriptors from overview + genres for embedding enrichment.
+    Rule-based, cap at ~5-6 descriptors. Uses simple keyword checks.
+    """
+    if not overview:
+        return []
+    ov = overview.lower()
+    genre_set = set(genres)
+    descriptors: list[str] = []
+    has_comedy = "comedy" in genre_set
+    has_drama = "drama" in genre_set
+
+    # Office / corporate workplace
+    if any(k in ov for k in ("office", "company", "boss", "employee", "coworker", "coworkers", "job", "workplace")):
+        if has_comedy:
+            descriptors.extend(["workplace comedy", "office comedy", "coworkers"])
+        else:
+            descriptors.append("workplace")
+
+    # Police / precinct
+    if any(k in ov for k in ("police", "cop", "cops", "detective", "detectives", "precinct", "squad")):
+        if has_comedy:
+            descriptors.extend(["police workplace comedy", "police precinct", "coworkers"])
+        else:
+            descriptors.extend(["police precinct", "detectives"])
+
+    # Hospital / medical
+    if any(k in ov for k in ("hospital", "doctor", "doctors", "nurse", "nurses", "medical", "clinic")):
+        descriptors.extend(["hospital workplace", "medical staff"])
+
+    # School
+    if any(k in ov for k in ("school", "teacher", "teachers", "principal", "students", "classroom")):
+        descriptors.extend(["school staff", "teachers", "workplace"])
+
+    # Newsroom / media
+    if any(k in ov for k in ("newsroom", "reporter", "reporters", "journalist", "journalists", "anchor", "tv station")):
+        descriptors.extend(["newsroom", "media workplace"])
+
+    # Ensemble / team
+    if any(k in ov for k in ("team", "staff", "crew", "department", "squad", "group of")):
+        descriptors.append("ensemble cast")
+        if has_comedy:
+            descriptors.append("ensemble comedy")
+
+    # Dedupe and cap
+    seen: set[str] = set()
+    out: list[str] = []
+    for d in descriptors:
+        if d not in seen and len(out) < 6:
+            seen.add(d)
+            out.append(d)
+    return out
+
+
 def build_embedding_text(show: Show) -> str:
-    """Build a single text blob for embedding: title, genres, overview (same structure for every show)."""
+    """Build a single text blob for embedding: title, genres, overview, themes."""
     title = (show.title or "").strip() or "Unknown"
     genres_str = _genres_to_string(show.genres)
     overview = (show.overview or "").strip()
-    return f"Title: {title}. Genres: {genres_str}. Overview: {overview}"
+    genre_names = _genres_to_list(show.genres)
+    descriptors = _infer_embedding_descriptors(overview, genre_names)
+
+    parts = [
+        f"Title: {title}.",
+        f"Genres: {genres_str}.",
+        f"Overview: {overview}.",
+    ]
+    if descriptors:
+        parts.append(f"Themes: {', '.join(descriptors)}.")
+    return " ".join(parts)
 
 
 def parse_args() -> argparse.Namespace:
