@@ -1081,7 +1081,7 @@ def recommend_shows(
     if source_path != "semantic" and top_scored:
         try:
             top_for_log = []
-            for i, item in enumerate(top_scored[:5]):
+            for i, item in enumerate(top_scored[:10]):
                 show = item["show"]
                 title = show.get("title") or "Unknown"
                 row = {

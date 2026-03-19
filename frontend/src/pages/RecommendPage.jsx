@@ -43,7 +43,7 @@ function RecommendPage({
             <div className="recommend-results-header">
               <div>
                 <h2>Your picks</h2>
-                <p>Up to 5 recommendations based on your current mood.</p>
+                <p>Up to 10 recommendations based on your current mood.</p>
               </div>
             </div>
 

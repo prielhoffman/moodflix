@@ -9,7 +9,7 @@ the main recommendation logic. All numeric tuning is centralized here.
 DEFAULT_TOP_N = 20
 DEFAULT_CANDIDATE_TOP_K = 80
 # Form flow (no query): return a short curated shortlist only. Semantic path ignores this.
-FORM_FLOW_TOP_N = 5
+FORM_FLOW_TOP_N = 10
 # When a request has a query, semantic search is used only if at least this many shows have embeddings.
 # If below this (or semantic returns fewer than top_n candidates), we fall back to full DB scan / static fallback.
 SEMANTIC_MIN_EMBEDDINGS = 50

@@ -29,7 +29,7 @@ import {
  * Two shows are "too similar" if they share 2+ genres (case-insensitive).
  * Keeps relevance order; skips shows too similar to already selected; returns up to maxCount.
  */
-function diversifyGuestMoodResults(shows, maxCount = 5) {
+function diversifyGuestMoodResults(shows, maxCount = 10) {
   if (!Array.isArray(shows) || shows.length === 0) return [];
   const selected = [];
   for (const show of shows) {
@@ -160,7 +160,7 @@ function App() {
     }
   }
 
-  /** Guest semantic search: POST /search/semantic → 5 results, stay on /. */
+  /** Guest semantic search: POST /search/semantic → 10 results, stay on /. */
   async function handleGuestSearch(query) {
     const trimmed = (query || "").trim();
     if (!trimmed) {
@@ -171,7 +171,7 @@ function App() {
     setError(null);
     setRecommendations([]);
     try {
-      const results = await semanticSearch(trimmed, 5);
+      const results = await semanticSearch(trimmed, 10);
       const normalized = (Array.isArray(results) ? results : []).map((item) => ({
         ...item,
         short_summary: item.overview ?? item.short_summary ?? "No summary available.",
@@ -188,7 +188,7 @@ function App() {
     }
   }
 
-  /** Guest mood buttons: POST /recommend → 5 results, stay on /. */
+  /** Guest mood buttons: POST /recommend → 10 results, stay on /. */
   async function handleGuestMood(mood, guestFamilySafe) {
     setIsLoading(true);
     setError(null);
@@ -208,9 +208,9 @@ function App() {
       const results = await recommendShows(payload);
       const arr = Array.isArray(results) ? results : [];
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'App.jsx:handleGuestMood',message:'after API',data:{rawCount:arr.length,sliceCount:arr.slice(0,5).length},hypothesisId:'H3_H4',timestamp:Date.now()})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/55b69589-7675-4c95-b733-981b1e330ec7',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'afab80'},body:JSON.stringify({sessionId:'afab80',location:'App.jsx:handleGuestMood',message:'after API',data:{rawCount:arr.length,sliceCount:arr.slice(0,10).length},hypothesisId:'H3_H4',timestamp:Date.now()})}).catch(()=>{});
       // #endregion
-      setRecommendations(arr.slice(0, 5));
+      setRecommendations(arr.slice(0, 10));
     } catch (err) {
       console.error(err);
       setError(err?.message || "Recommendations temporarily unavailable. Please try again.");
